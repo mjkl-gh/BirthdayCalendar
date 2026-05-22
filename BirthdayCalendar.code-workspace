@@ -1,0 +1,19 @@
+{
+  "folders": [
+    {
+      "path": "backend",
+      "name": "Backend (C++)"
+    },
+    {
+      "path": "frontend",
+      "name": "Frontend (Svelte)"
+    },
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "cmake.sourceDirectory": "${workspaceFolder:Backend (C++)}",
+    "cmake.buildDirectory": "${workspaceFolder:Backend (C++)}/build"
+  }
+}

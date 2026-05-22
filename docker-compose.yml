@@ -1,0 +1,20 @@
+services:
+  birthday-calendar:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: birthday-calendar
+    ports:
+      - "8080:8080"
+    environment:
+      - ICAL_URL=${ICAL_URL}
+      - SENDER_CHANNEL=${SENDER_CHANNEL:-smtp}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - MAIL_FROM=${MAIL_FROM}
+      - MAIL_TO=${MAIL_TO}
+    volumes:
+      - ./storage:/app/storage
+    restart: unless-stopped

@@ -1,0 +1,6 @@
+.git
+.github
+**/node_modules
+frontend/dist
+backend/build
+README.md

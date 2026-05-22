@@ -1,0 +1,20 @@
+{
+    "name": "BirthdayCalendar Dev",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "workspaceFolder": "/workspaces/BirthdayCalendar",
+    "remoteUser": "vscode",
+    "postCreateCommand": "cd frontend && npm install && cd ../backend && cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "svelte.svelte-vscode",
+                "dbaeumer.vscode-eslint"
+            ]
+        }
+    }
+}
