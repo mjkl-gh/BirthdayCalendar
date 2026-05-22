@@ -29,8 +29,10 @@ void addCorsHeaders(httplib::Response& res) {
 
 }  // namespace
 
-BirthdayServer::BirthdayServer(AppConfig config, std::unique_ptr<Notifier> sender)
-    : config_(std::move(config)), sender_(std::move(sender)) {}
+BirthdayServer::BirthdayServer(
+    AppConfig config,
+    std::vector<std::unique_ptr<Notifier>> notifiers)
+    : config_(std::move(config)), notifiers_(std::move(notifiers)) {}
 
 int BirthdayServer::run() {
   fs::create_directories(config_.pendingDir);
@@ -150,8 +152,14 @@ void BirthdayServer::handleCreateVcard(const httplib::Request& req,
   message << "Email: " << email << "\n";
   message << "Birthday: " << birthday << "\n";
 
-  bool sent = sender_->sendVcard("Birthday vCard submission", message.str(), vcfPath);
-  if (!sent) {
+  bool anySent = false;
+  for (const auto& notifier : notifiers_) {
+    if (notifier->sendVcard("Birthday vCard submission", message.str(), vcfPath)) {
+      anySent = true;
+    }
+  }
+
+  if (!anySent) {
     res.status = 502;
     res.set_content(R"({"error":"vCard stored but email delivery failed"})",
                     "application/json");

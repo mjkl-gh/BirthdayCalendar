@@ -3,6 +3,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 #include <httplib.h>
 
@@ -11,7 +12,7 @@
 
 class BirthdayServer {
  public:
-  BirthdayServer(AppConfig config, std::unique_ptr<Notifier> sender);
+  BirthdayServer(AppConfig config, std::vector<std::unique_ptr<Notifier>> notifiers);
   int run();
 
  private:
@@ -21,6 +22,6 @@ class BirthdayServer {
   void cleanupImportedVcards(const std::set<std::string>& currentMonthDays);
 
   AppConfig config_;
-  std::unique_ptr<Notifier> sender_;
+  std::vector<std::unique_ptr<Notifier>> notifiers_;
   httplib::Server server_;
 };

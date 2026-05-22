@@ -10,9 +10,9 @@ int main() {
   curl_global_init(CURL_GLOBAL_DEFAULT);
 
   AppConfig config = loadConfig();
-  auto sender = createNotifier(config);
+  auto notifiers = createNotifiers(config);
 
-  BirthdayServer server(std::move(config), std::move(sender));
+  BirthdayServer server(std::move(config), std::move(notifiers));
   const int exitCode = server.run();
 
   curl_global_cleanup();
