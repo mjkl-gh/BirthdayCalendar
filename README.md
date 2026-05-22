@@ -1,5 +1,8 @@
 # Birthday Calendar
 
+> ⚠️⚠️⚠️ **Warning:** This project is vibecoded dogshit. Run at your own risk
+> Then again, stuff meant for a magic mirror on the toilet should not be mission critical, right?
+
 Self-hosted birthday calendar app with:
 - A modern Svelte frontend that shows birthdays from a shared iCal feed.
 - A C++ backend API that fetches and parses iCal data.
