@@ -5,8 +5,6 @@
 
 #include "utils/text.h"
 
-using json = nlohmann::json;
-
 // Escape a vCard TEXT value per RFC 6350 §3.4:
 // strip bare CR/LF, then escape \, ; and ,
 static std::string escapeVcardText(std::string value) {
@@ -44,13 +42,13 @@ std::optional<std::string> extractVcardBirthday(const std::string& vcardContent)
   return std::nullopt;
 }
 
-std::string buildVcard(const json& payload) {
-  std::string firstName = escapeVcardText(payload.value("firstName", ""));
-  std::string lastName = escapeVcardText(payload.value("lastName", ""));
-  std::string fullName = escapeVcardText(trim(payload.value("firstName", "") + " " + payload.value("lastName", "")));
-  std::string email = escapeVcardText(payload.value("email", ""));
-  std::string birthday = payload.value("birthday", "");  // validated as YYYY-MM-DD; no escape needed
-  std::string notes = escapeVcardText(payload.value("notes", ""));
+std::string buildVcard(const Vcard& submission) {
+  std::string firstName = escapeVcardText(submission.firstName);
+  std::string lastName = escapeVcardText(submission.lastName);
+  std::string fullName = escapeVcardText(trim(submission.firstName + " " + submission.lastName));
+  std::string email = escapeVcardText(submission.email);
+  std::string birthday = submission.birthday;  // validated as YYYY-MM-DD; no escape needed
+  std::string notes = escapeVcardText(submission.notes);
 
   std::stringstream vcf;
   vcf << "BEGIN:VCARD\r\n";

@@ -2,15 +2,16 @@
 
 #include <curl/curl.h>
 
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
+#include "services/vcard.h"
+
 SmtpNotifier::SmtpNotifier(AppConfig config) : config_(std::move(config)) {}
 
-void SmtpNotifier::sendVcard(const std::string& subject,
-                             const std::string& message,
-                             const std::filesystem::path& attachmentPath) {
+void SmtpNotifier::sendVcard(const Vcard& submission) {
   if (config_.smtpUser.empty() || config_.smtpPass.empty() ||
       config_.smtpFrom.empty() || config_.smtpTo.empty()) {
     throw std::runtime_error("SmtpNotifier: SMTP credentials are not configured");
@@ -20,6 +21,15 @@ void SmtpNotifier::sendVcard(const std::string& subject,
   if (curl == nullptr) {
     throw std::runtime_error("SmtpNotifier: failed to initialise libcurl");
   }
+
+  const std::string subject = "Birthday vCard submission";
+  const std::string vcard = buildVcard(submission);
+
+  std::stringstream body;
+  body << "A new birthday request was submitted.\n";
+  body << "Name: " << submission.firstName << ' ' << submission.lastName << "\n";
+  body << "Email: " << submission.email << "\n";
+  body << "Birthday: " << submission.birthday << "\n";
 
   std::string url = "smtp://" + config_.smtpHost + ":" + std::to_string(config_.smtpPort);
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -45,12 +55,12 @@ void SmtpNotifier::sendVcard(const std::string& subject,
 
   part = curl_mime_addpart(mime);
   curl_mime_type(part, "text/plain; charset=utf-8");
-  curl_mime_data(part, message.c_str(), CURL_ZERO_TERMINATED);
+  curl_mime_data(part, body.str().c_str(), CURL_ZERO_TERMINATED);
 
   part = curl_mime_addpart(mime);
   curl_mime_type(part, "text/vcard");
-  curl_mime_filedata(part, attachmentPath.string().c_str());
-  curl_mime_filename(part, attachmentPath.filename().string().c_str());
+  curl_mime_data(part, vcard.c_str(), CURL_ZERO_TERMINATED);
+  curl_mime_filename(part, "birthday.vcf");
 
   curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
 

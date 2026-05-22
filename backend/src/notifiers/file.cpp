@@ -2,34 +2,30 @@
 
 #include <chrono>
 #include <filesystem>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
+#include "services/vcard.h"
 #include "utils/file.h"
+#include "utils/text.h"
 
-FileNotifier::FileNotifier(std::filesystem::path outboxDir)
-    : outboxDir_(std::move(outboxDir)) {
-  std::filesystem::create_directories(outboxDir_);
+FileNotifier::FileNotifier(std::filesystem::path pendingDir)
+    : pendingDir_(std::move(pendingDir)) {
+  std::filesystem::create_directories(pendingDir_);
 }
 
-void FileNotifier::sendVcard(const std::string& subject,
-                             const std::string& message,
-                             const std::filesystem::path& attachmentPath) {
+void FileNotifier::sendVcard(const Vcard& submission) {
   const auto now = std::chrono::system_clock::now();
   const auto epoch =
       std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch())
           .count();
-  std::filesystem::path outPath =
-      outboxDir_ / ("mail-" + std::to_string(epoch) + ".txt");
+  std::filesystem::path vcfPath = pendingDir_ /
+      (sanitizeFileName(submission.firstName + "-" + submission.lastName) +
+       "-" + std::to_string(epoch) + ".vcf");
 
-  std::stringstream data;
-  data << "Subject: " << subject << "\n";
-  data << "Message:\n" << message << "\n\n";
-  data << "Attachment: " << attachmentPath.string() << "\n";
-
-  if (!writeTextFile(outPath, data.str())) {
-    throw std::runtime_error("FileNotifier: failed to write to outbox: " + outPath.string());
+  const std::string vcard = buildVcard(submission);
+  if (!writeTextFile(vcfPath, vcard)) {
+    throw std::runtime_error("FileNotifier: failed to persist vCard: " + vcfPath.string());
   }
 }

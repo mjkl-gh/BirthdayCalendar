@@ -17,7 +17,6 @@ std::vector<std::unique_ptr<Notifier>> createNotifiers(const AppConfig& config) 
     notifiers.push_back(std::make_unique<SmtpNotifier>(config));
   }
 
-  fs::path outbox = fs::path(config.pendingDir).parent_path() / "outbox";
-  notifiers.push_back(std::make_unique<FileNotifier>(outbox));
+  notifiers.push_back(std::make_unique<FileNotifier>(config.pendingDir));
   return notifiers;
 }

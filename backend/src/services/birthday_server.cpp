@@ -30,7 +30,7 @@ BirthdayServer::BirthdayServer(
       notifiers_(std::move(notifiers)),
       icalFeedService_(config_.icalUrl),
       vcardFeedService_(config_.pendingDir),
-      vcardWorkflow_(config_.pendingDir, notifiers_) {}
+  vcardWorkflow_(notifiers_) {}
 
 int BirthdayServer::run() {
   fs::create_directories(config_.pendingDir);

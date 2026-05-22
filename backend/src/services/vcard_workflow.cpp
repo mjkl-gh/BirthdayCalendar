@@ -1,25 +1,18 @@
 #include "services/vcard_workflow.h"
 
-#include <chrono>
-#include <filesystem>
 #include <iostream>
 #include <regex>
-#include <sstream>
 #include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
-#include "services/vcard.h"
-#include "utils/file.h"
 #include "utils/text.h"
 
 using json = nlohmann::json;
-namespace fs = std::filesystem;
 
-VcardWorkflow::VcardWorkflow(std::filesystem::path pendingDir,
-                             std::vector<std::unique_ptr<Notifier>>& notifiers)
-    : pendingDir_(std::move(pendingDir)), notifiers_(notifiers) {}
+VcardWorkflow::VcardWorkflow(std::vector<std::unique_ptr<Notifier>>& notifiers)
+  : notifiers_(notifiers) {}
 
 VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
   json payload;
@@ -53,49 +46,48 @@ VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
     };
   }
 
-  const auto now = std::chrono::system_clock::now();
-  const auto epoch =
-      std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch())
-          .count();
-  std::string fileName = sanitizeFileName(firstName + "-" + lastName) + "-" +
-                         std::to_string(epoch) + ".vcf";
-  fs::path vcfPath = fs::path(pendingDir_) / fileName;
-
-  const std::string vcard = buildVcard(payload);
-  if (!writeTextFile(vcfPath, vcard)) {
-    return {
-        .statusCode = 500,
-        .body = R"({"error":"Failed to persist vCard"})",
-    };
-  }
-
-  std::stringstream message;
-  message << "A new birthday request was submitted.\n";
-  message << "Name: " << firstName << ' ' << lastName << "\n";
-  message << "Email: " << email << "\n";
-  message << "Birthday: " << birthday << "\n";
+  const Vcard submission{
+      .firstName = firstName,
+      .lastName = lastName,
+      .email = email,
+      .birthday = birthday,
+      .notes = notes,
+  };
 
   std::vector<std::string> errors;
   int sentCount = 0;
   for (const auto& notifier : notifiers_) {
     try {
-      notifier->sendVcard("Birthday vCard submission", message.str(), vcfPath);
+      notifier->sendVcard(submission);
       ++sentCount;
     } catch (const std::exception& e) {
-      std::cerr << "Notifier error: " << e.what() << std::endl;
+      std::cout << "[Notifier] sendVcard failed: " << e.what() << std::endl;
       errors.push_back(e.what());
     }
   }
 
   if (sentCount == 0 && !notifiers_.empty()) {
+    json response = {
+      {"error", "All notification channels failed"},
+      {"notifierErrors", errors},
+    };
     return {
         .statusCode = 502,
-        .body = R"({"error":"vCard stored but all notification channels failed"})",
+      .body = response.dump(),
     };
   }
 
+    json response = {
+      {"ok", true},
+      {"status", "submitted"},
+    };
+    if (!errors.empty()) {
+    response["warning"] = "Submitted, but some notification channels failed";
+    response["notifierErrors"] = errors;
+    }
+
   return {
       .statusCode = 201,
-      .body = R"({"ok":true,"status":"submitted"})",
+      .body = response.dump(),
   };
 }

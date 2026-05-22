@@ -1,34 +1,37 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount } from "svelte";
 
   let birthdays = [];
   let loading = true;
-  let error = '';
+  let error = "";
   let open = false;
-  let formError = '';
-  let formSuccess = '';
+  let formError = "";
+  let formWarning = "";
+  let formSuccess = "";
   let submitting = false;
 
   let form = {
-    firstName: '',
-    lastName: '',
-    email: '',
-    birthday: '',
-    notes: '',
+    firstName: "",
+    lastName: "",
+    email: "",
+    birthday: "",
+    notes: "",
   };
 
   async function loadBirthdays() {
     loading = true;
-    error = '';
+    error = "";
 
     try {
-      const response = await fetch('/api/birthdays');
+      const response = await fetch("/api/birthdays");
       if (!response.ok) {
         const payload = await response.json();
-        throw new Error(payload.error || 'Unable to load birthdays');
+        throw new Error(payload.error || "Unable to load birthdays");
       }
       birthdays = await response.json();
-      birthdays = birthdays.sort((a, b) => a.monthDay.localeCompare(b.monthDay));
+      birthdays = birthdays.sort((a, b) =>
+        a.monthDay.localeCompare(b.monthDay),
+      );
     } catch (err) {
       error = err.message;
     } finally {
@@ -37,36 +40,56 @@
   }
 
   async function submit() {
-    formError = '';
-    formSuccess = '';
+    formError = "";
+    formWarning = "";
+    formSuccess = "";
 
     if (!form.firstName || !form.lastName || !form.email || !form.birthday) {
-      formError = 'Please complete all required fields.';
+      formError = "Please complete all required fields.";
       return;
     }
 
     submitting = true;
     try {
-      const response = await fetch('/api/vcards', {
-        method: 'POST',
+      const response = await fetch("/api/vcards", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(form),
       });
 
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.error || 'Submission failed');
+        if (
+          Array.isArray(payload.notifierErrors) &&
+          payload.notifierErrors.length > 0
+        ) {
+          console.error("[Notifier] delivery failed:", payload.notifierErrors);
+        }
+        throw new Error(payload.error || "Submission failed");
       }
 
-      formSuccess = 'Submitted. Thank you!';
+      if (payload.warning) {
+        formWarning = payload.warning;
+      }
+      if (
+        Array.isArray(payload.notifierErrors) &&
+        payload.notifierErrors.length > 0
+      ) {
+        console.warn(
+          "[Notifier] partial delivery failure:",
+          payload.notifierErrors,
+        );
+      }
+
+      formSuccess = "Submitted. Thank you!";
       form = {
-        firstName: '',
-        lastName: '',
-        email: '',
-        birthday: '',
-        notes: '',
+        firstName: "",
+        lastName: "",
+        email: "",
+        birthday: "",
+        notes: "",
       };
       await loadBirthdays();
     } catch (err) {
@@ -123,16 +146,21 @@
           <input placeholder="Last name" bind:value={form.lastName} />
           <input type="email" placeholder="Email" bind:value={form.email} />
           <input type="date" bind:value={form.birthday} />
-          <textarea placeholder="Notes (optional)" rows="3" bind:value={form.notes}></textarea>
+          <textarea
+            placeholder="Notes (optional)"
+            rows="3"
+            bind:value={form.notes}
+          ></textarea>
         </div>
 
         {#if formError}<p class="error">{formError}</p>{/if}
+        {#if formWarning}<p class="warning">{formWarning}</p>{/if}
         {#if formSuccess}<p class="success">{formSuccess}</p>{/if}
 
         <div class="actions">
           <button class="ghost" on:click={() => (open = false)}>Close</button>
           <button class="solid" on:click={submit} disabled={submitting}>
-            {submitting ? 'Sending...' : 'Send vCard'}
+            {submitting ? "Sending..." : "Send vCard"}
           </button>
         </div>
       </section>
@@ -148,7 +176,7 @@
   }
 
   header h1 {
-    font-family: 'Fraunces', serif;
+    font-family: "Fraunces", serif;
     margin: 0.3rem 0;
     font-size: clamp(2rem, 5vw, 4rem);
     line-height: 1;
@@ -205,6 +233,10 @@
 
   .success {
     color: #1c7c35;
+  }
+
+  .warning {
+    color: #9a5b00;
   }
 
   .fab {

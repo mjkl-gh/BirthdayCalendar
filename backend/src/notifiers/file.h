@@ -1,18 +1,16 @@
 #pragma once
 
 #include <filesystem>
-#include <string>
 
+#include "models.h"
 #include "notifiers/notifier.h"
 
 class FileNotifier final : public Notifier {
  public:
-  explicit FileNotifier(std::filesystem::path outboxDir);
+  explicit FileNotifier(std::filesystem::path pendingDir);
 
-  void sendVcard(const std::string& subject,
-                 const std::string& message,
-                 const std::filesystem::path& attachmentPath) override;
+  void sendVcard(const Vcard& submission) override;
 
  private:
-  std::filesystem::path outboxDir_;
+  std::filesystem::path pendingDir_;
 };

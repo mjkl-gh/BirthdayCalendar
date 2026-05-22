@@ -14,12 +14,10 @@ struct VcardSubmitResult {
 
 class VcardWorkflow {
  public:
-  VcardWorkflow(std::filesystem::path pendingDir,
-                std::vector<std::unique_ptr<Notifier>>& notifiers);
+  explicit VcardWorkflow(std::vector<std::unique_ptr<Notifier>>& notifiers);
 
   VcardSubmitResult submit(const std::string& requestBody) const;
 
  private:
-  std::filesystem::path pendingDir_;
   std::vector<std::unique_ptr<Notifier>>& notifiers_;
 };
