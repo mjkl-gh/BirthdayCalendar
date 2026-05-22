@@ -27,6 +27,63 @@ void addCorsHeaders(httplib::Response& res) {
   res.set_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
 }
 
+std::optional<std::string> extractVcardName(const std::string& vcardContent) {
+  std::istringstream stream(vcardContent);
+  std::string line;
+
+  while (std::getline(stream, line)) {
+    line = trim(line);
+    if (line.rfind("FN:", 0) == 0) {
+      std::string value = trim(line.substr(3));
+      if (!value.empty()) {
+        return value;
+      }
+    }
+  }
+
+  return std::nullopt;
+}
+
+void appendPendingBirthdays(const fs::path& pendingDir,
+                            std::set<std::string>& monthDays,
+                            json& payload) {
+  if (!fs::exists(pendingDir)) {
+    return;
+  }
+
+  for (const auto& entry : fs::directory_iterator(pendingDir)) {
+    if (!entry.is_regular_file() || entry.path().extension() != ".vcf") {
+      continue;
+    }
+
+    std::optional<std::string> content = readTextFile(entry.path());
+    if (!content.has_value()) {
+      continue;
+    }
+
+    std::optional<std::string> birthday = extractVcardBirthday(content.value());
+    if (!birthday.has_value()) {
+      continue;
+    }
+
+    const std::string monthDay = toMonthDay(birthday.value());
+    if (monthDay.empty() || monthDays.contains(monthDay)) {
+      continue;
+    }
+
+    const std::string name =
+        extractVcardName(content.value()).value_or("Pending birthday");
+
+    monthDays.insert(monthDay);
+    payload.push_back({
+        {"name", name},
+        {"date", birthday.value()},
+        {"monthDay", monthDay},
+        {"pending", true},
+    });
+  }
+}
+
 }  // namespace
 
 BirthdayServer::BirthdayServer(
@@ -122,6 +179,7 @@ void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Respon
   }
 
   cleanupImportedVcards(monthDays);
+  appendPendingBirthdays(config_.pendingDir, monthDays, payload);
 
   res.set_content(payload.dump(), "application/json");
 }
