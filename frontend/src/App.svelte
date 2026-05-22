@@ -18,6 +18,36 @@
     notes: "",
   };
 
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  $: groupedBirthdays = birthdays.reduce((groups, item) => {
+    const month = Number.parseInt(item.monthDay?.slice(0, 2) || "0", 10);
+    const monthLabel =
+      month >= 1 && month <= 12 ? monthNames[month - 1] : "Unknown";
+    const existingGroup = groups.find((group) => group.month === monthLabel);
+
+    if (existingGroup) {
+      existingGroup.items.push(item);
+      return groups;
+    }
+
+    groups.push({ month: monthLabel, items: [item] });
+    return groups;
+  }, []);
+
   async function loadBirthdays() {
     loading = true;
     error = "";
@@ -122,13 +152,21 @@
   {:else if birthdays.length === 0}
     <p class="state">No birthdays found yet.</p>
   {:else}
-    <section class="grid">
-      {#each birthdays as item, index}
-        <article class="card" style={`animation-delay: ${index * 60}ms`}>
-          <p class="date">{item.monthDay}</p>
-          <h2>{item.name}</h2>
-          <p>{item.date}</p>
-        </article>
+    <section class="month-list">
+      {#each groupedBirthdays as group, groupIndex}
+        <div
+          class="month-group"
+          style={`animation-delay: ${groupIndex * 60}ms`}
+        >
+          <h2 class="month-title">{group.month}</h2>
+          {#each group.items as item}
+            <article class="card">
+              <p class="date">{item.monthDay}</p>
+              <h3>{item.name}</h3>
+              <p>{item.date}</p>
+            </article>
+          {/each}
+        </div>
       {/each}
     </section>
   {/if}
@@ -195,11 +233,25 @@
     margin-top: 0;
   }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 1rem;
+  .month-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
     margin-top: 2rem;
+  }
+
+  .month-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    animation: rise 350ms ease forwards;
+    opacity: 0;
+  }
+
+  .month-title {
+    margin: 0;
+    font-family: "Fraunces", serif;
+    font-size: 1.35rem;
   }
 
   .card {
@@ -208,11 +260,10 @@
     border: 1px solid var(--line);
     border-radius: 1rem;
     padding: 1rem;
-    animation: rise 350ms ease forwards;
-    opacity: 0;
+    width: 100%;
   }
 
-  .card h2 {
+  .card h3 {
     margin: 0.2rem 0;
     font-size: 1.05rem;
   }
