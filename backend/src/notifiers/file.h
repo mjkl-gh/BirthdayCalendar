@@ -9,7 +9,7 @@ class FileNotifier final : public Notifier {
  public:
   explicit FileNotifier(std::filesystem::path outboxDir);
 
-  bool sendVcard(const std::string& subject,
+  void sendVcard(const std::string& subject,
                  const std::string& message,
                  const std::filesystem::path& attachmentPath) override;
 

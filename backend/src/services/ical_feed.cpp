@@ -19,6 +19,16 @@ IcalFeedResult IcalFeedService::fetchBirthdays() const {
     };
   }
 
+  // Enforce http:// or https:// to prevent SSRF via file:// / ftp:// etc.
+  if (icalUrl_.rfind("https://", 0) != 0 && icalUrl_.rfind("http://", 0) != 0) {
+    return {
+        .ok = false,
+        .statusCode = 500,
+        .error = "ICAL_URL must use http:// or https://",
+        .birthdays = {},
+    };
+  }
+
   std::optional<std::string> ics = fetchRemoteText(icalUrl_);
   if (!ics.has_value()) {
     return {

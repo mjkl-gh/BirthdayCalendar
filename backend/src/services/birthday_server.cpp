@@ -66,6 +66,8 @@ int BirthdayServer::run() {
 }
 
 void BirthdayServer::configureRoutes() {
+  server_.set_payload_max_length(65536);  // 64 KiB — protects against oversized POST bodies
+
   server_.set_pre_routing_handler([](const httplib::Request&, httplib::Response& res) {
     addCorsHeaders(res);
     return httplib::Server::HandlerResponse::Unhandled;

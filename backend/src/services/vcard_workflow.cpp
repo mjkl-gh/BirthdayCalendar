@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <iostream>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -35,10 +36,17 @@ VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
   const std::string lastName = trim(payload.value("lastName", ""));
   const std::string email = trim(payload.value("email", ""));
   const std::string birthday = trim(payload.value("birthday", ""));
+  const std::string notes = trim(payload.value("notes", ""));
 
   static const std::regex datePattern(R"(^\d{4}-\d{2}-\d{2}$)");
-  if (firstName.empty() || lastName.empty() || email.empty() ||
-      !std::regex_match(birthday, datePattern)) {
+  static const std::regex emailPattern(R"([^@\s]+@[^@\s]+\.[^@\s]+)");
+
+  if (firstName.empty() || firstName.size() > 100 ||
+      lastName.empty() || lastName.size() > 100 ||
+      email.empty() || email.size() > 254 ||
+      !std::regex_match(email, emailPattern) ||
+      !std::regex_match(birthday, datePattern) ||
+      notes.size() > 1000) {
     return {
         .statusCode = 400,
         .body = R"({"error":"Missing or invalid form fields"})",
@@ -67,17 +75,22 @@ VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
   message << "Email: " << email << "\n";
   message << "Birthday: " << birthday << "\n";
 
-  bool anySent = false;
+  std::vector<std::string> errors;
+  int sentCount = 0;
   for (const auto& notifier : notifiers_) {
-    if (notifier->sendVcard("Birthday vCard submission", message.str(), vcfPath)) {
-      anySent = true;
+    try {
+      notifier->sendVcard("Birthday vCard submission", message.str(), vcfPath);
+      ++sentCount;
+    } catch (const std::exception& e) {
+      std::cerr << "Notifier error: " << e.what() << std::endl;
+      errors.push_back(e.what());
     }
   }
 
-  if (!anySent) {
+  if (sentCount == 0 && !notifiers_.empty()) {
     return {
         .statusCode = 502,
-        .body = R"({"error":"vCard stored but email delivery failed"})",
+        .body = R"({"error":"vCard stored but all notification channels failed"})",
     };
   }
 

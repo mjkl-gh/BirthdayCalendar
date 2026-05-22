@@ -2,22 +2,23 @@
 
 #include <curl/curl.h>
 
+#include <stdexcept>
 #include <string>
 #include <utility>
 
 SmtpNotifier::SmtpNotifier(AppConfig config) : config_(std::move(config)) {}
 
-bool SmtpNotifier::sendVcard(const std::string& subject,
+void SmtpNotifier::sendVcard(const std::string& subject,
                              const std::string& message,
                              const std::filesystem::path& attachmentPath) {
   if (config_.smtpUser.empty() || config_.smtpPass.empty() ||
       config_.smtpFrom.empty() || config_.smtpTo.empty()) {
-    return false;
+    throw std::runtime_error("SmtpNotifier: SMTP credentials are not configured");
   }
 
   CURL* curl = curl_easy_init();
   if (curl == nullptr) {
-    return false;
+    throw std::runtime_error("SmtpNotifier: failed to initialise libcurl");
   }
 
   std::string url = "smtp://" + config_.smtpHost + ":" + std::to_string(config_.smtpPort);
@@ -59,5 +60,8 @@ bool SmtpNotifier::sendVcard(const std::string& subject,
   curl_slist_free_all(recipients);
   curl_easy_cleanup(curl);
 
-  return result == CURLE_OK;
+  if (result != CURLE_OK) {
+    throw std::runtime_error(std::string("SmtpNotifier: curl_easy_perform failed: ") +
+                             curl_easy_strerror(result));
+  }
 }

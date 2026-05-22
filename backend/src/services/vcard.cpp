@@ -7,6 +7,28 @@
 
 using json = nlohmann::json;
 
+// Escape a vCard TEXT value per RFC 6350 §3.4:
+// strip bare CR/LF, then escape \, ; and ,
+static std::string escapeVcardText(std::string value) {
+  // Remove bare CR and LF characters that would break the line structure
+  std::string result;
+  result.reserve(value.size());
+  for (char c : value) {
+    if (c == '\r' || c == '\n') continue;
+    result += c;
+  }
+  // Escape backslash first, then semicolon and comma
+  std::string out;
+  out.reserve(result.size() + 8);
+  for (char c : result) {
+    if (c == '\\')      { out += "\\\\"; }
+    else if (c == ';')  { out += "\\;";  }
+    else if (c == ',')  { out += "\\,";  }
+    else                { out += c;      }
+  }
+  return out;
+}
+
 std::optional<std::string> extractVcardBirthday(const std::string& vcardContent) {
   std::istringstream stream(vcardContent);
   std::string line;
@@ -23,12 +45,12 @@ std::optional<std::string> extractVcardBirthday(const std::string& vcardContent)
 }
 
 std::string buildVcard(const json& payload) {
-  std::string firstName = payload.value("firstName", "");
-  std::string lastName = payload.value("lastName", "");
-  std::string fullName = trim(firstName + " " + lastName);
-  std::string email = payload.value("email", "");
-  std::string birthday = payload.value("birthday", "");
-  std::string notes = payload.value("notes", "");
+  std::string firstName = escapeVcardText(payload.value("firstName", ""));
+  std::string lastName = escapeVcardText(payload.value("lastName", ""));
+  std::string fullName = escapeVcardText(trim(payload.value("firstName", "") + " " + payload.value("lastName", "")));
+  std::string email = escapeVcardText(payload.value("email", ""));
+  std::string birthday = payload.value("birthday", "");  // validated as YYYY-MM-DD; no escape needed
+  std::string notes = escapeVcardText(payload.value("notes", ""));
 
   std::stringstream vcf;
   vcf << "BEGIN:VCARD\r\n";
