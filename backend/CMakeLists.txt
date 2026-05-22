@@ -31,10 +31,13 @@ add_executable(birthday_backend
   src/utils/file.cpp
   src/notifiers/file.cpp
   src/services/ical.cpp
+  src/services/ical_feed.cpp
   src/services/notifierfactory.cpp
   src/notifiers/smtp.cpp
   src/utils/text.cpp
+  src/services/vcard_feed.cpp
   src/services/vcard.cpp
+  src/services/vcard_workflow.cpp
 )
 
 target_include_directories(birthday_backend PRIVATE

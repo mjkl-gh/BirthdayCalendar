@@ -1,20 +1,14 @@
 #include "services/birthday_server.h"
 
-#include <chrono>
 #include <filesystem>
 #include <iostream>
-#include <regex>
 #include <set>
-#include <sstream>
 #include <string>
 #include <utility>
 
 #include <nlohmann/json.hpp>
 
 #include "utils/file.h"
-#include "services/ical.h"
-#include "utils/text.h"
-#include "services/vcard.h"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -27,69 +21,16 @@ void addCorsHeaders(httplib::Response& res) {
   res.set_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
 }
 
-std::optional<std::string> extractVcardName(const std::string& vcardContent) {
-  std::istringstream stream(vcardContent);
-  std::string line;
-
-  while (std::getline(stream, line)) {
-    line = trim(line);
-    if (line.rfind("FN:", 0) == 0) {
-      std::string value = trim(line.substr(3));
-      if (!value.empty()) {
-        return value;
-      }
-    }
-  }
-
-  return std::nullopt;
-}
-
-void appendPendingBirthdays(const fs::path& pendingDir,
-                            std::set<std::string>& monthDays,
-                            json& payload) {
-  if (!fs::exists(pendingDir)) {
-    return;
-  }
-
-  for (const auto& entry : fs::directory_iterator(pendingDir)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".vcf") {
-      continue;
-    }
-
-    std::optional<std::string> content = readTextFile(entry.path());
-    if (!content.has_value()) {
-      continue;
-    }
-
-    std::optional<std::string> birthday = extractVcardBirthday(content.value());
-    if (!birthday.has_value()) {
-      continue;
-    }
-
-    const std::string monthDay = toMonthDay(birthday.value());
-    if (monthDay.empty() || monthDays.contains(monthDay)) {
-      continue;
-    }
-
-    const std::string name =
-        extractVcardName(content.value()).value_or("Pending birthday");
-
-    monthDays.insert(monthDay);
-    payload.push_back({
-        {"name", name},
-        {"date", birthday.value()},
-        {"monthDay", monthDay},
-        {"pending", true},
-    });
-  }
-}
-
 }  // namespace
 
 BirthdayServer::BirthdayServer(
     AppConfig config,
     std::vector<std::unique_ptr<Notifier>> notifiers)
-    : config_(std::move(config)), notifiers_(std::move(notifiers)) {}
+    : config_(std::move(config)),
+      notifiers_(std::move(notifiers)),
+      icalFeedService_(config_.icalUrl),
+      vcardFeedService_(config_.pendingDir),
+      vcardWorkflow_(config_.pendingDir, notifiers_) {}
 
 int BirthdayServer::run() {
   fs::create_directories(config_.pendingDir);
@@ -152,24 +93,19 @@ void BirthdayServer::configureRoutes() {
 void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Response& res) {
   addCorsHeaders(res);
 
-  if (config_.icalUrl.empty()) {
-    res.status = 500;
-    res.set_content(R"({"error":"ICAL_URL is not configured"})", "application/json");
+  const IcalFeedResult feed = icalFeedService_.fetchBirthdays();
+  if (!feed.ok) {
+    res.status = feed.statusCode;
+    res.set_content(
+        json({{"error", feed.error}}).dump(),
+        "application/json");
     return;
   }
 
-  auto ics = fetchRemoteText(config_.icalUrl);
-  if (!ics.has_value()) {
-    res.status = 502;
-    res.set_content(R"({"error":"Could not fetch iCal feed"})", "application/json");
-    return;
-  }
-
-  std::vector<BirthdayEvent> events = parseIcsBirthdays(ics.value());
   std::set<std::string> monthDays;
   json payload = json::array();
 
-  for (const auto& event : events) {
+  for (const auto& event : feed.birthdays) {
     monthDays.insert(event.monthDay);
     payload.push_back({
         {"name", event.name},
@@ -178,8 +114,8 @@ void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Respon
     });
   }
 
-  cleanupImportedVcards(monthDays);
-  appendPendingBirthdays(config_.pendingDir, monthDays, payload);
+  vcardFeedService_.cleanupImportedVcards(monthDays);
+  vcardFeedService_.appendPendingBirthdays(monthDays, payload);
 
   res.set_content(payload.dump(), "application/json");
 }
@@ -187,94 +123,7 @@ void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Respon
 void BirthdayServer::handleCreateVcard(const httplib::Request& req,
                                        httplib::Response& res) {
   addCorsHeaders(res);
-
-  json payload;
-  try {
-    payload = json::parse(req.body);
-  } catch (...) {
-    res.status = 400;
-    res.set_content(R"({"error":"Invalid JSON"})", "application/json");
-    return;
-  }
-
-  const std::string firstName = trim(payload.value("firstName", ""));
-  const std::string lastName = trim(payload.value("lastName", ""));
-  const std::string email = trim(payload.value("email", ""));
-  const std::string birthday = trim(payload.value("birthday", ""));
-
-  static const std::regex datePattern(R"(^\d{4}-\d{2}-\d{2}$)");
-  if (firstName.empty() || lastName.empty() || email.empty() ||
-      !std::regex_match(birthday, datePattern)) {
-    res.status = 400;
-    res.set_content(R"({"error":"Missing or invalid form fields"})",
-                    "application/json");
-    return;
-  }
-
-  const auto now = std::chrono::system_clock::now();
-  const auto epoch =
-      std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch())
-          .count();
-  std::string fileName = sanitizeFileName(firstName + "-" + lastName) + "-" +
-                         std::to_string(epoch) + ".vcf";
-  fs::path vcfPath = fs::path(config_.pendingDir) / fileName;
-
-  const std::string vcard = buildVcard(payload);
-  if (!writeTextFile(vcfPath, vcard)) {
-    res.status = 500;
-    res.set_content(R"({"error":"Failed to persist vCard"})", "application/json");
-    return;
-  }
-
-  std::stringstream message;
-  message << "A new birthday request was submitted.\n";
-  message << "Name: " << firstName << ' ' << lastName << "\n";
-  message << "Email: " << email << "\n";
-  message << "Birthday: " << birthday << "\n";
-
-  bool anySent = false;
-  for (const auto& notifier : notifiers_) {
-    if (notifier->sendVcard("Birthday vCard submission", message.str(), vcfPath)) {
-      anySent = true;
-    }
-  }
-
-  if (!anySent) {
-    res.status = 502;
-    res.set_content(R"({"error":"vCard stored but email delivery failed"})",
-                    "application/json");
-    return;
-  }
-
-  res.status = 201;
-  res.set_content(R"({"ok":true,"status":"submitted"})", "application/json");
-}
-
-void BirthdayServer::cleanupImportedVcards(
-    const std::set<std::string>& currentMonthDays) {
-  if (!fs::exists(config_.pendingDir)) {
-    return;
-  }
-
-  for (const auto& entry : fs::directory_iterator(config_.pendingDir)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".vcf") {
-      continue;
-    }
-
-    std::optional<std::string> content = readTextFile(entry.path());
-    if (!content.has_value()) {
-      continue;
-    }
-
-    std::optional<std::string> birthday = extractVcardBirthday(content.value());
-    if (!birthday.has_value()) {
-      continue;
-    }
-
-    std::string monthDay = toMonthDay(birthday.value());
-    if (!monthDay.empty() && currentMonthDays.contains(monthDay)) {
-      std::error_code ec;
-      fs::remove(entry.path(), ec);
-    }
-  }
+  const VcardSubmitResult result = vcardWorkflow_.submit(req.body);
+  res.status = result.statusCode;
+  res.set_content(result.body, "application/json");
 }
