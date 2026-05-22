@@ -29,6 +29,7 @@ uint32_t getEnvIntOr(const char* key, uint32_t fallback) {
 
 AppConfig loadConfig() {
   return {
+  .publicDir = getEnvOr("PUBLIC_DIR", "../frontend/dist"),
       .port = getEnvIntOr("PORT", 8080),
       .icalUrl = getEnvOr("ICAL_URL", ""),
       .pendingDir = getEnvOr("PENDING_DIR", "./storage/pending"),

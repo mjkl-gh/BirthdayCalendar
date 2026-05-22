@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run demo stack (backend + iCal)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "cd /workspaces/BirthdayCalendar/frontend && npm run build && cd /workspaces/BirthdayCalendar/storage/demo-ical && python3 -m http.server 8090 --bind 0.0.0.0 >/tmp/demo-ical.log 2>&1 & cd /workspaces/BirthdayCalendar/backend && ICAL_URL=http://localhost:8090/birthdays.ics PUBLIC_DIR=../frontend/dist ./build/birthday_backend"
+            ],
+            "isBackground": true,
+            "problemMatcher": []
+        }
+    ]
+}

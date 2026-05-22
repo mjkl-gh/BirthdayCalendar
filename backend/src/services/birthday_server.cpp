@@ -39,6 +39,28 @@ int BirthdayServer::run() {
 
   configureRoutes();
 
+  if (fs::exists(config_.publicDir) && fs::is_directory(config_.publicDir)) {
+    server_.set_mount_point("/", config_.publicDir.c_str());
+  } else {
+    std::cerr << "Warning: PUBLIC_DIR does not exist: " << config_.publicDir
+              << std::endl;
+  }
+
+  server_.set_error_handler([this](const httplib::Request& req, httplib::Response& res) {
+    if (res.status != 404 || req.path.rfind("/api", 0) == 0) {
+      return;
+    }
+
+    const fs::path indexPath = fs::path(config_.publicDir) / "index.html";
+    auto indexHtml = readTextFile(indexPath);
+    if (!indexHtml.has_value()) {
+      return;
+    }
+
+    res.status = 200;
+    res.set_content(indexHtml.value(), "text/html");
+  });
+
   std::cout << "Birthday calendar server listening on 0.0.0.0:" << config_.port
             << std::endl;
   server_.listen("0.0.0.0", config_.port);

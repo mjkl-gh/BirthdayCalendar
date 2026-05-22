@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <filesystem>
 
 struct BirthdayEvent {
   std::string name;
@@ -9,11 +11,12 @@ struct BirthdayEvent {
 };
 
 struct AppConfig {
+  std::filesystem::path publicDir;
   uint32_t port;
 
   std::string icalUrl;
-  
-  std::string pendingDir;
+
+  std::filesystem::path pendingDir;
 
   std::string smtpHost;
   uint32_t smtpPort;
@@ -21,5 +24,5 @@ struct AppConfig {
   std::string smtpPass;
   std::string smtpFrom;
   std::string smtpTo;
-  
+
 };
