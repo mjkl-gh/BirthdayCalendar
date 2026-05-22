@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
 
   let birthdays = [];
   let loading = true;
@@ -12,6 +12,7 @@
   let isDarkMode = false;
   let sunsetLabel = "";
   let themeMode = "auto";
+  let shouldFloatFab = false;
 
   const deviceTimeZone =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -216,6 +217,12 @@
     setThemeMode(themeMode === "dark" ? "light" : "dark");
   }
 
+  function updateFabMode() {
+    // If content extends past the viewport, keep FAB floating and always visible.
+    shouldFloatFab =
+      document.documentElement.scrollHeight > window.innerHeight + 4;
+  }
+
   $: groupedBirthdays = birthdays.reduce((groups, item) => {
     const month = Number.parseInt(item.monthDay?.slice(0, 2) || "0", 10);
     const monthLabel =
@@ -249,6 +256,8 @@
       error = err.message;
     } finally {
       loading = false;
+      await tick();
+      updateFabMode();
     }
   }
 
@@ -318,6 +327,10 @@
     }
   }
 
+  $: if (!loading) {
+    tick().then(updateFabMode);
+  }
+
   onMount(() => {
     const storedMode = localStorage.getItem(themeStorageKey);
     if (["auto", "light", "dark"].includes(storedMode)) {
@@ -326,8 +339,13 @@
 
     loadBirthdays();
     syncThemeToSunset();
+    updateFabMode();
     const timer = setInterval(syncThemeToSunset, themeTimerMs);
-    return () => clearInterval(timer);
+    window.addEventListener("resize", updateFabMode);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("resize", updateFabMode);
+    };
   });
 </script>
 
@@ -349,13 +367,6 @@
     <p class="eyebrow">Shared iCal</p>
     <h1>Birthday Constellation</h1>
     <p class="sub">If someone is missing, tap + and send a vCard request.</p>
-    <p class="theme-note">
-      {themeMode === "auto"
-        ? isDarkMode
-          ? "Night mode active"
-          : `Night mode starts at ${sunsetLabel}`
-        : `Theme mode: ${themeMode}`}
-    </p>
   </header>
 
   {#if loading}
@@ -384,7 +395,12 @@
     </section>
   {/if}
 
-  <button class="fab" on:click={() => (open = true)} aria-label="Add birthday">
+  <button
+    class="fab"
+    class:floating={shouldFloatFab}
+    on:click={() => (open = true)}
+    aria-label="Add birthday"
+  >
     +
   </button>
 
@@ -426,6 +442,13 @@
     margin: 0 auto;
   }
 
+  :global(:root) {
+    --content-rail-right: max(
+      1.2rem,
+      calc((100vw - min(980px, 100vw)) / 2 + 1.2rem)
+    );
+  }
+
   header h1 {
     font-family: "Fraunces", serif;
     margin: 0.3rem 0;
@@ -455,7 +478,7 @@
   .theme-toggle {
     position: fixed;
     top: 1rem;
-    right: 1rem;
+    right: var(--content-rail-right);
     z-index: 30;
     width: 2.6rem;
     height: 2.6rem;
@@ -538,9 +561,11 @@
   }
 
   .fab {
-    position: fixed;
-    right: 1rem;
-    bottom: 1rem;
+    position: relative;
+    display: grid;
+    place-items: center;
+    margin-top: 1rem;
+    margin-left: auto;
     width: 3.6rem;
     height: 3.6rem;
     border: 0;
@@ -551,6 +576,15 @@
     background: linear-gradient(140deg, var(--accent), #ff7e58);
     box-shadow: 0 12px 30px rgba(230, 95, 57, 0.35);
     cursor: pointer;
+  }
+
+  .fab.floating {
+    position: fixed;
+    right: var(--content-rail-right);
+    bottom: 1.2rem;
+    z-index: 30;
+    margin-top: 0;
+    margin-left: 0;
   }
 
   .overlay {
@@ -615,7 +649,11 @@
 
     .theme-toggle {
       top: 0.7rem;
-      right: 0.7rem;
+      right: var(--content-rail-right);
+    }
+
+    .fab.floating {
+      right: var(--content-rail-right);
     }
   }
 </style>
