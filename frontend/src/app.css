@@ -7,6 +7,27 @@
   --accent-soft: #ffc483;
   --card: rgba(255, 255, 255, 0.72);
   --line: rgba(27, 31, 42, 0.12);
+  --surface: #ffffff;
+  --ghost: #ececf4;
+  --bg-spot-a: #ffd6ad;
+  --bg-spot-b: #9fd7ff;
+  --bg-base-a: #f8f3e9;
+  --bg-base-b: #eceefb;
+}
+
+html.theme-dark {
+  --ink: #e8edff;
+  --mist: #0c1320;
+  --accent: #ff9a66;
+  --accent-soft: #ffcf9b;
+  --card: rgba(25, 33, 51, 0.8);
+  --line: rgba(232, 237, 255, 0.14);
+  --surface: #131c2f;
+  --ghost: #283349;
+  --bg-spot-a: #503424;
+  --bg-spot-b: #1f3e59;
+  --bg-base-a: #0f1828;
+  --bg-base-b: #111b2f;
 }
 
 * {
@@ -19,9 +40,9 @@ body {
   font-family: 'Space Grotesk', sans-serif;
   color: var(--ink);
   background:
-    radial-gradient(circle at 85% 10%, #ffd6ad 0%, transparent 38%),
-    radial-gradient(circle at 10% 30%, #9fd7ff 0%, transparent 28%),
-    linear-gradient(135deg, #f8f3e9 0%, #eceefb 100%);
+    radial-gradient(circle at 85% 10%, var(--bg-spot-a) 0%, transparent 38%),
+    radial-gradient(circle at 10% 30%, var(--bg-spot-b) 0%, transparent 28%),
+    linear-gradient(135deg, var(--bg-base-a) 0%, var(--bg-base-b) 100%);
 }
 
 #app {
@@ -33,6 +54,7 @@ body {
     opacity: 0;
     transform: translateY(12px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

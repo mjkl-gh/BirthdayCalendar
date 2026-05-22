@@ -9,6 +9,14 @@
   let formWarning = "";
   let formSuccess = "";
   let submitting = false;
+  let isDarkMode = false;
+  let sunsetLabel = "";
+  let themeMode = "auto";
+
+  const deviceTimeZone =
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const themeTimerMs = 60_000;
+  const themeStorageKey = "birthday-calendar-theme-mode";
 
   let form = {
     firstName: "",
@@ -32,6 +40,181 @@
     "November",
     "December",
   ];
+
+  function toNumberFromParts(parts, type) {
+    return Number.parseInt(
+      parts.find((part) => part.type === type)?.value || "0",
+      10,
+    );
+  }
+
+  function getLocalDateParts(date, timeZone) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date);
+
+    return {
+      year: toNumberFromParts(parts, "year"),
+      month: toNumberFromParts(parts, "month"),
+      day: toNumberFromParts(parts, "day"),
+      hour: toNumberFromParts(parts, "hour"),
+      minute: toNumberFromParts(parts, "minute"),
+      second: toNumberFromParts(parts, "second"),
+    };
+  }
+
+  function getDayOfYear(date, timeZone) {
+    const { year, month, day } = getLocalDateParts(date, timeZone);
+    const current = Date.UTC(year, month - 1, day);
+    const start = Date.UTC(year, 0, 1);
+    return Math.floor((current - start) / 86_400_000) + 1;
+  }
+
+  function getOffsetHours(date, timeZone) {
+    const zoneText = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(date)
+      .find((part) => part.type === "timeZoneName")?.value;
+
+    const match = zoneText?.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+    if (!match) {
+      return 0;
+    }
+
+    const sign = match[1] === "-" ? -1 : 1;
+    const hours = Number.parseInt(match[2], 10);
+    const minutes = Number.parseInt(match[3] || "0", 10);
+    return sign * (hours + minutes / 60);
+  }
+
+  // Timezone provides location context; latitude is estimated by region for
+  // a practical sunset approximation without requiring geolocation permissions.
+  function estimateLatitudeFromTimezone(timeZone) {
+    if (
+      timeZone.startsWith("Australia/") ||
+      timeZone.startsWith("Pacific/Auckland") ||
+      timeZone.startsWith("Pacific/Chatham") ||
+      timeZone.startsWith("America/Argentina") ||
+      timeZone.startsWith("America/Santiago") ||
+      timeZone.startsWith("America/Sao_Paulo") ||
+      timeZone.startsWith("America/Montevideo")
+    ) {
+      return -34;
+    }
+    if (timeZone.startsWith("Europe/")) return 48;
+    if (timeZone.startsWith("America/")) return 39;
+    if (timeZone.startsWith("Africa/")) return 15;
+    if (timeZone.startsWith("Asia/")) return 31;
+    return 35;
+  }
+
+  function estimateSunTimes(date, timeZone) {
+    const latitudeDeg = estimateLatitudeFromTimezone(timeZone);
+    const dayOfYear = getDayOfYear(date, timeZone);
+
+    const gamma = ((2 * Math.PI) / 365) * (dayOfYear - 1);
+    const eqTime =
+      229.18 *
+      (0.000075 +
+        0.001868 * Math.cos(gamma) -
+        0.032077 * Math.sin(gamma) -
+        0.014615 * Math.cos(2 * gamma) -
+        0.040849 * Math.sin(2 * gamma));
+    const decl =
+      0.006918 -
+      0.399912 * Math.cos(gamma) +
+      0.070257 * Math.sin(gamma) -
+      0.006758 * Math.cos(2 * gamma) +
+      0.000907 * Math.sin(2 * gamma) -
+      0.002697 * Math.cos(3 * gamma) +
+      0.00148 * Math.sin(3 * gamma);
+
+    const latitude = (latitudeDeg * Math.PI) / 180;
+    const zenith = (90.833 * Math.PI) / 180;
+    const cosHourAngle =
+      (Math.cos(zenith) - Math.sin(latitude) * Math.sin(decl)) /
+      (Math.cos(latitude) * Math.cos(decl));
+    const clampedCosHourAngle = Math.max(-1, Math.min(1, cosHourAngle));
+    const hourAngleDeg = (Math.acos(clampedCosHourAngle) * 180) / Math.PI;
+
+    const offsetHours = getOffsetHours(date, timeZone);
+    const centralMeridian = offsetHours * 15;
+    const estimatedLongitude = centralMeridian;
+    const solarNoonMinutes =
+      720 - eqTime + 4 * (centralMeridian - estimatedLongitude);
+    const sunriseMinutes = solarNoonMinutes - 4 * hourAngleDeg;
+    const sunsetMinutes = solarNoonMinutes + 4 * hourAngleDeg;
+    return {
+      sunriseMinutes,
+      sunsetMinutes,
+    };
+  }
+
+  function getLocalMinutes(date, timeZone) {
+    const { hour, minute, second } = getLocalDateParts(date, timeZone);
+    return hour * 60 + minute + second / 60;
+  }
+
+  function formatMinutes(value) {
+    const normalized = ((Math.round(value) % 1440) + 1440) % 1440;
+    const hours24 = Math.floor(normalized / 60);
+    const minutes = normalized % 60;
+    const suffix = hours24 >= 12 ? "PM" : "AM";
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+    return `${hours12}:${String(minutes).padStart(2, "0")} ${suffix}`;
+  }
+
+  function syncThemeToSunset() {
+    const now = new Date();
+    const { sunriseMinutes, sunsetMinutes } = estimateSunTimes(
+      now,
+      deviceTimeZone,
+    );
+    const currentMinutes = getLocalMinutes(now, deviceTimeZone);
+
+    const autoDarkMode =
+      currentMinutes >= ((sunsetMinutes % 1440) + 1440) % 1440 ||
+      currentMinutes < ((sunriseMinutes % 1440) + 1440) % 1440;
+
+    if (themeMode === "dark") {
+      isDarkMode = true;
+    } else if (themeMode === "light") {
+      isDarkMode = false;
+    } else {
+      isDarkMode = autoDarkMode;
+    }
+
+    sunsetLabel = formatMinutes(sunsetMinutes);
+
+    document.documentElement.classList.toggle("theme-dark", isDarkMode);
+  }
+
+  function setThemeMode(mode) {
+    if (!["auto", "light", "dark"].includes(mode)) {
+      return;
+    }
+
+    themeMode = mode;
+    localStorage.setItem(themeStorageKey, mode);
+    syncThemeToSunset();
+  }
+
+  function toggleTheme() {
+    if (themeMode === "auto") {
+      setThemeMode(isDarkMode ? "light" : "dark");
+      return;
+    }
+    setThemeMode(themeMode === "dark" ? "light" : "dark");
+  }
 
   $: groupedBirthdays = birthdays.reduce((groups, item) => {
     const month = Number.parseInt(item.monthDay?.slice(0, 2) || "0", 10);
@@ -135,14 +318,44 @@
     }
   }
 
-  onMount(loadBirthdays);
+  onMount(() => {
+    const storedMode = localStorage.getItem(themeStorageKey);
+    if (["auto", "light", "dark"].includes(storedMode)) {
+      themeMode = storedMode;
+    }
+
+    loadBirthdays();
+    syncThemeToSunset();
+    const timer = setInterval(syncThemeToSunset, themeTimerMs);
+    return () => clearInterval(timer);
+  });
 </script>
 
 <main class="shell">
+  <button
+    class="theme-toggle"
+    on:click={toggleTheme}
+    aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+    title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+  >
+    {#if isDarkMode}
+      ☀
+    {:else}
+      ☾
+    {/if}
+  </button>
+
   <header>
     <p class="eyebrow">Shared iCal</p>
     <h1>Birthday Constellation</h1>
     <p class="sub">If someone is missing, tap + and send a vCard request.</p>
+    <p class="theme-note">
+      {themeMode === "auto"
+        ? isDarkMode
+          ? "Night mode active"
+          : `Night mode starts at ${sunsetLabel}`
+        : `Theme mode: ${themeMode}`}
+    </p>
   </header>
 
   {#if loading}
@@ -233,6 +446,40 @@
     margin-top: 0;
   }
 
+  .theme-note {
+    margin: 0.25rem 0 0;
+    font-size: 0.92rem;
+    opacity: 0.82;
+  }
+
+  .theme-toggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 30;
+    width: 2.6rem;
+    height: 2.6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--ink);
+    display: inline-grid;
+    place-items: center;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+
+  .theme-toggle:hover {
+    filter: brightness(1.05);
+  }
+
+  .theme-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .month-list {
     display: flex;
     flex-direction: column;
@@ -317,7 +564,8 @@
 
   .modal {
     width: min(96vw, 550px);
-    background: white;
+    background: var(--surface);
+    border: 1px solid var(--line);
     border-radius: 1rem;
     padding: 1rem;
   }
@@ -352,7 +600,7 @@
   }
 
   .ghost {
-    background: #ececf4;
+    background: var(--ghost);
   }
 
   .solid {
@@ -363,6 +611,11 @@
   @media (max-width: 640px) {
     .shell {
       padding-top: 1.8rem;
+    }
+
+    .theme-toggle {
+      top: 0.7rem;
+      right: 0.7rem;
     }
   }
 </style>
