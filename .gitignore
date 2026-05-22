@@ -3,4 +3,6 @@ frontend/dist/
 backend/build/
 .env
 storage/outbox/
+backend/storage/pending/
+backend/storage/outbox/
 .DS_Store
