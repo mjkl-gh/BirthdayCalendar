@@ -1,22 +1,22 @@
 #pragma once
 
+#include <expected>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "../notifiers/notifier.h"
 
-struct VcardSubmitResult {
-  int statusCode;
-  std::string body;
-};
+using json = nlohmann::json;
 
 class VcardWorkflow {
  public:
   explicit VcardWorkflow(std::vector<std::unique_ptr<Notifier>>& notifiers);
 
-  VcardSubmitResult submit(const std::string& requestBody) const;
+  std::pair<int, json> submit(const std::string& requestBody) const;
 
  private:
   std::vector<std::unique_ptr<Notifier>>& notifiers_;

@@ -5,24 +5,17 @@
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
-
 #include "utils/text.h"
-
-using json = nlohmann::json;
 
 VcardWorkflow::VcardWorkflow(std::vector<std::unique_ptr<Notifier>>& notifiers)
   : notifiers_(notifiers) {}
 
-VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
+std::pair<int, json> VcardWorkflow::submit(const std::string& requestBody) const {
   json payload;
   try {
     payload = json::parse(requestBody);
   } catch (...) {
-    return {
-        .statusCode = 400,
-        .body = R"({"error":"Invalid JSON"})",
-    };
+    return {400, json{{"error", "Invalid JSON"}}};
   }
 
   const std::string firstName = trim(payload.value("firstName", ""));
@@ -40,10 +33,7 @@ VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
       !std::regex_match(email, emailPattern) ||
       !std::regex_match(birthday, datePattern) ||
       notes.size() > 1000) {
-    return {
-        .statusCode = 400,
-        .body = R"({"error":"Missing or invalid form fields"})",
-    };
+    return {400, json{{"error", "Missing or invalid form fields"}}};
   }
 
   const Vcard submission{
@@ -61,7 +51,7 @@ VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
       notifier->sendVcard(submission);
       ++sentCount;
     } catch (const std::exception& e) {
-      std::cout << "[Notifier] sendVcard failed: " << e.what() << std::endl;
+      std::cerr << "[Notifier] sendVcard failed: " << e.what() << '\n';
       errors.push_back(e.what());
     }
   }
@@ -71,23 +61,17 @@ VcardSubmitResult VcardWorkflow::submit(const std::string& requestBody) const {
       {"error", "All notification channels failed"},
       {"notifierErrors", errors},
     };
-    return {
-        .statusCode = 502,
-      .body = response.dump(),
-    };
+    return {502, response};
   }
 
-    json response = {
-      {"ok", true},
-      {"status", "submitted"},
-    };
-    if (!errors.empty()) {
+  json response = {
+    {"ok", true},
+    {"status", "submitted"},
+  };
+  if (!errors.empty()) {
     response["warning"] = "Submitted, but some notification channels failed";
     response["notifierErrors"] = errors;
-    }
+  }
 
-  return {
-      .statusCode = 201,
-      .body = response.dump(),
-  };
+  return {201, response};
 }

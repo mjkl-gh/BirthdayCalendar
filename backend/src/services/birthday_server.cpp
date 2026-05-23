@@ -69,10 +69,9 @@ BirthdayServer::BirthdayServer(
 int BirthdayServer::run() {
   if (config_.authEnabled && config_.publicBaseUrl.empty()) {
     std::cerr << "Error: AUTH_ENABLED is true but PUBLIC_BASE_URL is not set. "
-              << "Set PUBLIC_BASE_URL please."
-              << "\n\n"
+              << "Set PUBLIC_BASE_URL please.\n"
               << "Disable auth with AUTH_ENABLED=false. This should only be done"
-              << " for development purposes." << std::endl;
+              << " for development purposes.\n";
     return 1;
   }
 
@@ -83,8 +82,7 @@ int BirthdayServer::run() {
   if (fs::exists(config_.publicDir) && fs::is_directory(config_.publicDir)) {
     server_.set_mount_point("/", config_.publicDir.c_str());
   } else {
-    std::cerr << "Warning: PUBLIC_DIR does not exist: " << config_.publicDir
-              << std::endl;
+    std::cerr << "Warning: PUBLIC_DIR does not exist: " << config_.publicDir << '\n';
   }
 
   server_.set_error_handler([this](const httplib::Request& req, httplib::Response& res) {
@@ -103,8 +101,7 @@ int BirthdayServer::run() {
   });
 
   std::cout << "Birthday calendar server on 0.0.0.0 port " << config_.port
-            << " (http://0.0.0.0:" << config_.port << "/)"
-            << std::endl;
+            << " (http://0.0.0.0:" << config_.port << "/)\n";
   server_.listen("0.0.0.0", config_.port);
   return 0;
 }
@@ -189,12 +186,12 @@ void BirthdayServer::configureRoutes() {
 void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Response& res) {
   addCorsHeaders(res);
 
-  const IcalFeedResult feed = icalFeedService_.fetchBirthdays();
+  auto feed = icalFeedService_.fetchBirthdays();
   std::set<std::string> monthDays;
   json payload = json::array();
 
-  if (feed.ok) {
-    for (const auto& event : feed.birthdays) {
+  if (feed) {
+    for (const auto& event : *feed) {
       monthDays.insert(event.monthDay);
       payload.push_back({
           {"name", event.name},
@@ -204,7 +201,7 @@ void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Respon
     }
   } else {
     // Keep API usable even when remote iCal is down/misconfigured.
-    res.set_header("X-Calendar-Warning", feed.error);
+    res.set_header("X-Calendar-Warning", feed.error());
   }
 
   vcardFeedService_.cleanupImportedVcards(monthDays);
@@ -272,7 +269,7 @@ void BirthdayServer::handleAuthExchange(const httplib::Request& req,
 void BirthdayServer::handleCreateVcard(const httplib::Request& req,
                                        httplib::Response& res) {
   addCorsHeaders(res);
-  const VcardSubmitResult result = vcardWorkflow_.submit(req.body);
-  res.status = result.statusCode;
-  res.set_content(result.body, "application/json");
+  const auto [statusCode, response] = vcardWorkflow_.submit(req.body);
+  res.status = statusCode;
+  res.set_content(response.dump(), "application/json");
 }

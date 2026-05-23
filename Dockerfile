@@ -8,10 +8,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM alpine:3.21 AS backend-builder
-RUN apk add --no-cache build-base cmake git curl-dev openssl-dev
+RUN apk add --no-cache clang cmake git curl-dev openssl-dev llvm-tools
 WORKDIR /app
 COPY backend/ ./backend/
-RUN cmake -S backend -B backend/build -DCMAKE_BUILD_TYPE=Release \
+RUN cmake -S backend -B backend/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ \
   && cmake --build backend/build --config Release -j
 
 FROM alpine:3.21 AS runtime

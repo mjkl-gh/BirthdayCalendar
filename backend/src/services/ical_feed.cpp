@@ -9,40 +9,20 @@
 IcalFeedService::IcalFeedService(std::string icalUrl)
     : icalUrl_(std::move(icalUrl)) {}
 
-IcalFeedResult IcalFeedService::fetchBirthdays() const {
+std::expected<std::vector<BirthdayEvent>, std::string> IcalFeedService::fetchBirthdays() const {
   if (icalUrl_.empty()) {
-    return {
-        .ok = false,
-        .statusCode = 500,
-        .error = "ICAL_URL is not configured",
-        .birthdays = {},
-    };
+    return std::unexpected("ICAL_URL is not configured");
   }
 
   // Enforce http:// or https:// to prevent SSRF via file:// / ftp:// etc.
   if (icalUrl_.rfind("https://", 0) != 0 && icalUrl_.rfind("http://", 0) != 0) {
-    return {
-        .ok = false,
-        .statusCode = 500,
-        .error = "ICAL_URL must use http:// or https://",
-        .birthdays = {},
-    };
+    return std::unexpected("ICAL_URL must use http:// or https://");
   }
 
   std::optional<std::string> ics = fetchRemoteText(icalUrl_);
   if (!ics.has_value()) {
-    return {
-        .ok = false,
-        .statusCode = 502,
-        .error = "Could not fetch iCal feed",
-        .birthdays = {},
-    };
+    return std::unexpected("Could not fetch iCal feed");
   }
 
-  return {
-      .ok = true,
-      .statusCode = 200,
-      .error = "",
-      .birthdays = parseIcsBirthdays(ics.value()),
-  };
+  return parseIcsBirthdays(ics.value());
 }
