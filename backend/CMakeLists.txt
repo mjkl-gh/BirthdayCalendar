@@ -32,6 +32,7 @@ add_executable(birthday_backend
   src/notifiers/file.cpp
   src/services/ical.cpp
   src/services/ical_feed.cpp
+  src/services/auth.cpp
   src/services/notifierfactory.cpp
   src/notifiers/smtp.cpp
   src/utils/text.cpp

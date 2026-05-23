@@ -5,4 +5,5 @@ backend/build/
 storage/outbox/
 backend/storage/pending/
 backend/storage/outbox/
+backend/storage/.jwt_secret
 .DS_Store

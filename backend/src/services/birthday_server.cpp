@@ -21,6 +21,10 @@ void addCorsHeaders(httplib::Response& res) {
   res.set_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
 }
 
+bool startsWith(const std::string& value, const std::string& prefix) {
+  return value.rfind(prefix, 0) == 0;
+}
+
 }  // namespace
 
 BirthdayServer::BirthdayServer(
@@ -29,6 +33,7 @@ BirthdayServer::BirthdayServer(
     : config_(std::move(config)),
       notifiers_(std::move(notifiers)),
       icalFeedService_(config_.icalUrl),
+      authService_(config_),
       vcardFeedService_(config_.pendingDir),
   vcardWorkflow_(notifiers_) {}
 
@@ -68,8 +73,49 @@ int BirthdayServer::run() {
 void BirthdayServer::configureRoutes() {
   server_.set_payload_max_length(65536);  // 64 KiB — protects against oversized POST bodies
 
-  server_.set_pre_routing_handler([](const httplib::Request&, httplib::Response& res) {
+  server_.set_pre_routing_handler([this](const httplib::Request& req, httplib::Response& res) {
     addCorsHeaders(res);
+
+    if (req.method == "OPTIONS") {
+      return httplib::Server::HandlerResponse::Unhandled;
+    }
+
+    const bool isPublicApi =
+        req.path == "/api/health" ||
+        req.path == "/api/auth/qr" ||
+        req.path == "/api/auth/exchange";
+    const bool isAuthPage = req.path == "/auth";
+    const bool isStaticAsset =
+        startsWith(req.path, "/assets/") ||
+        req.path == "/favicon.ico";
+
+    const auto token = authService_.extractTokenFromRequest(req);
+    const bool isAuthenticated =
+        token.has_value() && authService_.validateToken(token.value());
+
+    if (startsWith(req.path, "/api")) {
+      if (!isPublicApi && !isAuthenticated) {
+        res.status = 401;
+        res.set_content(R"({"error":"Authentication required"})", "application/json");
+        return httplib::Server::HandlerResponse::Handled;
+      }
+      return httplib::Server::HandlerResponse::Unhandled;
+    }
+
+    if (isAuthPage || isStaticAsset) {
+      if (isAuthPage && isAuthenticated) {
+        res.set_redirect("/");
+        return httplib::Server::HandlerResponse::Handled;
+      }
+      return httplib::Server::HandlerResponse::Unhandled;
+    }
+
+    if (!isAuthenticated) {
+      res.set_header("Cache-Control", "no-store");
+      res.set_redirect("/auth");
+      return httplib::Server::HandlerResponse::Handled;
+    }
+
     return httplib::Server::HandlerResponse::Unhandled;
   });
 
@@ -81,6 +127,14 @@ void BirthdayServer::configureRoutes() {
   server_.Get("/api/health", [](const httplib::Request&, httplib::Response& res) {
     addCorsHeaders(res);
     res.set_content(R"({"ok":true})", "application/json");
+  });
+
+  server_.Get("/api/auth/qr", [this](const httplib::Request& req, httplib::Response& res) {
+    handleAuthQr(req, res);
+  });
+
+  server_.Post("/api/auth/exchange", [this](const httplib::Request& req, httplib::Response& res) {
+    handleAuthExchange(req, res);
   });
 
   server_.Get("/api/birthdays", [this](const httplib::Request& req, httplib::Response& res) {
@@ -120,6 +174,52 @@ void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Respon
   vcardFeedService_.appendPendingBirthdays(monthDays, payload);
 
   res.set_content(payload.dump(), "application/json");
+}
+
+void BirthdayServer::handleAuthQr(const httplib::Request& req,
+                                  httplib::Response& res) {
+  addCorsHeaders(res);
+
+  if (!authService_.isLocalQrClient(req)) {
+    res.status = 403;
+    res.set_content(R"({"error":"QR token endpoint is only available from local networks"})", "application/json");
+    return;
+  }
+
+  const JwtTokenInfo token = authService_.currentHourlyToken();
+  res.set_header("Cache-Control", "no-store");
+  res.set_content(
+      json({
+          {"token", token.token},
+          {"expiresAt", token.expiresAtEpoch},
+      }).dump(),
+      "application/json");
+}
+
+void BirthdayServer::handleAuthExchange(const httplib::Request& req,
+                                        httplib::Response& res) {
+  addCorsHeaders(res);
+
+  json payload;
+  try {
+    payload = json::parse(req.body);
+  } catch (...) {
+    res.status = 400;
+    res.set_content(R"({"error":"Invalid JSON"})", "application/json");
+    return;
+  }
+
+  const std::string token = payload.value("token", "");
+  if (token.empty() || !authService_.validateToken(token)) {
+    res.status = 401;
+    res.set_content(R"({"error":"Invalid token"})", "application/json");
+    return;
+  }
+
+  const std::string forwardedProto = req.get_header_value("X-Forwarded-Proto");
+  const bool secureCookie = forwardedProto == "https";
+  res.set_header("Set-Cookie", authService_.buildAuthCookie(token, secureCookie));
+  res.set_content(R"({"ok":true})", "application/json");
 }
 
 void BirthdayServer::handleCreateVcard(const httplib::Request& req,

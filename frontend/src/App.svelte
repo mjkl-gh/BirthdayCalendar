@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from "svelte";
+  import QRCode from "qrcode";
 
   let birthdays = [];
   let loading = true;
@@ -13,6 +14,12 @@
   let sunsetLabel = "";
   let themeMode = "auto";
   let shouldFloatFab = false;
+  let authRequired = false;
+  let authLoading = false;
+  let authError = "";
+  let authTokenInput = "";
+  let qrDataUrl = "";
+  let qrExpiresAt = 0;
 
   const deviceTimeZone =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -223,6 +230,84 @@
       document.documentElement.scrollHeight > window.innerHeight + 4;
   }
 
+  async function apiFetch(url, options = {}) {
+    const response = await fetch(url, {
+      credentials: "include",
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+      },
+    });
+
+    if (response.status === 401) {
+      authRequired = true;
+      await loadQrToken();
+    }
+    return response;
+  }
+
+  async function loadQrToken() {
+    authLoading = true;
+    authError = "";
+    try {
+      const response = await fetch("/api/auth/qr", {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Could not load local QR token");
+      }
+
+      const payload = await response.json();
+      authTokenInput = payload.token || "";
+      qrExpiresAt = payload.expiresAt || 0;
+      qrDataUrl = await QRCode.toDataURL(authTokenInput, {
+        width: 240,
+        margin: 1,
+      });
+    } catch (err) {
+      authError = err.message;
+      qrDataUrl = "";
+    } finally {
+      authLoading = false;
+    }
+  }
+
+  async function exchangeAuthToken() {
+    authError = "";
+
+    try {
+      const response = await fetch("/api/auth/exchange", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token: authTokenInput }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || "Authentication failed");
+      }
+
+      authRequired = false;
+      await loadBirthdays();
+    } catch (err) {
+      authError = err.message;
+    }
+  }
+
+  function formatEpoch(epoch) {
+    if (!epoch) {
+      return "";
+    }
+    return new Date(epoch * 1000).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   $: groupedBirthdays = birthdays.reduce((groups, item) => {
     const month = Number.parseInt(item.monthDay?.slice(0, 2) || "0", 10);
     const monthLabel =
@@ -243,8 +328,12 @@
     error = "";
 
     try {
-      const response = await fetch("/api/birthdays");
+      const response = await apiFetch("/api/birthdays");
       if (!response.ok) {
+        if (response.status === 401) {
+          birthdays = [];
+          return;
+        }
         const payload = await response.json();
         throw new Error(payload.error || "Unable to load birthdays");
       }
@@ -273,13 +362,17 @@
 
     submitting = true;
     try {
-      const response = await fetch("/api/vcards", {
+      const response = await apiFetch("/api/vcards", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(form),
       });
+
+      if (response.status === 401) {
+        throw new Error("Please authenticate using the local QR token first");
+      }
 
       const payload = await response.json();
       if (!response.ok) {
@@ -369,13 +462,50 @@
     <p class="sub">If someone is missing, tap + and send a vCard request.</p>
   </header>
 
-  {#if loading}
+  {#if authRequired}
+    <section class="auth-panel">
+      <h2>Authenticate To Continue</h2>
+      <p>
+        Open this page from your local network to retrieve the rotating token
+        QR, then paste or scan the token below.
+      </p>
+
+      {#if authLoading}
+        <p class="state">Loading local QR token...</p>
+      {:else}
+        {#if qrDataUrl}
+          <img class="qr-image" src={qrDataUrl} alt="Auth token QR code" />
+          <p class="state">Token expires at {formatEpoch(qrExpiresAt)}</p>
+        {/if}
+
+        <textarea
+          class="token-input"
+          rows="3"
+          placeholder="Paste token"
+          bind:value={authTokenInput}
+        ></textarea>
+
+        <div class="auth-actions">
+          <button class="ghost" on:click={loadQrToken}>Refresh QR</button>
+          <button class="solid" on:click={exchangeAuthToken}
+            >Authenticate</button
+          >
+        </div>
+
+        {#if authError}
+          <p class="error">{authError}</p>
+        {/if}
+      {/if}
+    </section>
+  {/if}
+
+  {#if !authRequired && loading}
     <p class="state">Loading birthdays...</p>
-  {:else if error}
+  {:else if !authRequired && error}
     <p class="state error">{error}</p>
-  {:else if birthdays.length === 0}
+  {:else if !authRequired && birthdays.length === 0}
     <p class="state">No birthdays found yet.</p>
-  {:else}
+  {:else if !authRequired}
     <section class="month-list">
       {#each groupedBirthdays as group, groupIndex}
         <div
@@ -395,14 +525,16 @@
     </section>
   {/if}
 
-  <button
-    class="fab"
-    class:floating={shouldFloatFab}
-    on:click={() => (open = true)}
-    aria-label="Add birthday"
-  >
-    +
-  </button>
+  {#if !authRequired}
+    <button
+      class="fab"
+      class:floating={shouldFloatFab}
+      on:click={() => (open = true)}
+      aria-label="Add birthday"
+    >
+      +
+    </button>
+  {/if}
 
   {#if open}
     <div class="overlay" on:click={closeOnBackdropClick} role="presentation">
@@ -469,12 +601,6 @@
     margin-top: 0;
   }
 
-  .theme-note {
-    margin: 0.25rem 0 0;
-    font-size: 0.92rem;
-    opacity: 0.82;
-  }
-
   .theme-toggle {
     position: fixed;
     top: 1rem;
@@ -522,6 +648,50 @@
     margin: 0;
     font-family: "Fraunces", serif;
     font-size: 1.35rem;
+  }
+
+  .auth-panel {
+    margin-top: 1.5rem;
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    background: var(--card);
+    padding: 1rem;
+  }
+
+  .auth-panel h2 {
+    margin: 0 0 0.5rem;
+  }
+
+  .qr-image {
+    width: min(240px, 70vw);
+    border-radius: 0.6rem;
+    border: 1px solid var(--line);
+    background: white;
+  }
+
+  .token-input {
+    width: 100%;
+    margin-top: 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 0.7rem;
+    padding: 0.7rem;
+    font: inherit;
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .auth-actions {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.7rem;
+  }
+
+  .auth-actions button {
+    border: 0;
+    border-radius: 0.6rem;
+    padding: 0.6rem 0.9rem;
+    font: inherit;
+    cursor: pointer;
   }
 
   .card {

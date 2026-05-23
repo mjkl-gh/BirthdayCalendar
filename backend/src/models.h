@@ -33,4 +33,13 @@ struct AppConfig {
   std::string smtpFrom;
   std::string smtpTo;
 
+  std::string jwtSecret;
+  std::filesystem::path jwtSecretFile;
+  std::string jwtIssuer;
+  std::string jwtCookieName;
+  uint32_t jwtRotationGraceSeconds;
+  uint32_t jwtTokenLifetimeSeconds;
+  bool trustProxy;
+  std::string localQrAllowedCidrs;
+
 };
