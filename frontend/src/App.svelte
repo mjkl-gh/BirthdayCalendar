@@ -14,6 +14,7 @@
   let sunsetLabel = "";
   let themeMode = "auto";
   let shouldFloatFab = false;
+  let calendarWarning = "";
   let authRequired = false;
   let authLoading = false;
   let authError = "";
@@ -326,9 +327,11 @@
   async function loadBirthdays() {
     loading = true;
     error = "";
+    calendarWarning = "";
 
     try {
       const response = await apiFetch("/api/birthdays");
+      calendarWarning = response.headers.get("X-Calendar-Warning") || "";
       if (!response.ok) {
         if (response.status === 401) {
           birthdays = [];
@@ -501,6 +504,10 @@
 
   {#if !authRequired && loading}
     <p class="state">Loading birthdays...</p>
+  {:else if !authRequired && calendarWarning}
+    <p class="state warning">
+      {calendarWarning}. Showing pending requests only.
+    </p>
   {:else if !authRequired && error}
     <p class="state error">{error}</p>
   {:else if !authRequired && birthdays.length === 0}

@@ -150,24 +150,21 @@ void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Respon
   addCorsHeaders(res);
 
   const IcalFeedResult feed = icalFeedService_.fetchBirthdays();
-  if (!feed.ok) {
-    res.status = feed.statusCode;
-    res.set_content(
-        json({{"error", feed.error}}).dump(),
-        "application/json");
-    return;
-  }
-
   std::set<std::string> monthDays;
   json payload = json::array();
 
-  for (const auto& event : feed.birthdays) {
-    monthDays.insert(event.monthDay);
-    payload.push_back({
-        {"name", event.name},
-        {"date", event.date},
-        {"monthDay", event.monthDay},
-    });
+  if (feed.ok) {
+    for (const auto& event : feed.birthdays) {
+      monthDays.insert(event.monthDay);
+      payload.push_back({
+          {"name", event.name},
+          {"date", event.date},
+          {"monthDay", event.monthDay},
+      });
+    }
+  } else {
+    // Keep API usable even when remote iCal is down/misconfigured.
+    res.set_header("X-Calendar-Warning", feed.error);
   }
 
   vcardFeedService_.cleanupImportedVcards(monthDays);
