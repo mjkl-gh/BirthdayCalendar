@@ -43,8 +43,9 @@ AppConfig loadConfig() {
       .jwtSecretFile = getEnvOr("JWT_SECRET_FILE", "./storage/.jwt_secret"),
       .jwtIssuer = getEnvOr("JWT_ISSUER", "birthday-calendar"),
       .jwtCookieName = getEnvOr("JWT_COOKIE_NAME", "birthday_auth"),
-      .jwtRotationGraceSeconds = getEnvIntOr("JWT_ROTATION_GRACE_SECONDS", 300),
-      .jwtTokenLifetimeSeconds = getEnvIntOr("JWT_TOKEN_LIFETIME_SECONDS", 3600),
+      .jwtRotationGraceSeconds = getEnvIntOr("JWT_ROTATION_GRACE_SECONDS", 30),
+      .jwtTokenLifetimeSeconds = getEnvIntOr("JWT_TOKEN_LIFETIME_SECONDS", 30),
+      .jwtSessionLifetimeSeconds = getEnvIntOr("JWT_SESSION_LIFETIME_SECONDS", 3600),
       .trustProxy = getEnvOr("TRUST_PROXY", "false") == "true",
       .localQrAllowedCidrs = getEnvOr("LOCAL_QR_ALLOWED_CIDRS", "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"),
   };

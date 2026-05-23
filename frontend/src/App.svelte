@@ -19,6 +19,7 @@
   let authLoading = false;
   let authError = "";
   let authTokenInput = "";
+  let authUrl = "";
   let qrDataUrl = "";
   let qrExpiresAt = 0;
 
@@ -262,13 +263,15 @@
       const payload = await response.json();
       authTokenInput = payload.token || "";
       qrExpiresAt = payload.expiresAt || 0;
-      qrDataUrl = await QRCode.toDataURL(authTokenInput, {
+      authUrl = `${window.location.origin}/auth?token=${encodeURIComponent(authTokenInput)}`;
+      qrDataUrl = await QRCode.toDataURL(authUrl, {
         width: 240,
         margin: 1,
       });
     } catch (err) {
       authError = err.message;
       qrDataUrl = "";
+      authUrl = "";
     } finally {
       authLoading = false;
     }
@@ -293,6 +296,7 @@
       }
 
       authRequired = false;
+      window.history.replaceState({}, "", "/");
       await loadBirthdays();
     } catch (err) {
       authError = err.message;
@@ -433,7 +437,13 @@
       themeMode = storedMode;
     }
 
-    loadBirthdays();
+    const tokenFromUrl = new URLSearchParams(window.location.search).get("token");
+    if (tokenFromUrl) {
+      authTokenInput = tokenFromUrl;
+      exchangeAuthToken();
+    } else {
+      loadBirthdays();
+    }
     syncThemeToSunset();
     updateFabMode();
     const timer = setInterval(syncThemeToSunset, themeTimerMs);
@@ -479,6 +489,9 @@
         {#if qrDataUrl}
           <img class="qr-image" src={qrDataUrl} alt="Auth token QR code" />
           <p class="state">Token expires at {formatEpoch(qrExpiresAt)}</p>
+          <p class="auth-url">
+            <a href={authUrl}>{authUrl}</a>
+          </p>
         {/if}
 
         <textarea
@@ -685,6 +698,16 @@
     font: inherit;
     background: var(--surface);
     color: var(--ink);
+  }
+
+  .auth-url {
+    margin: 0.6rem 0 0;
+    word-break: break-all;
+  }
+
+  .auth-url a {
+    color: var(--accent);
+    text-decoration: underline;
   }
 
   .auth-actions {

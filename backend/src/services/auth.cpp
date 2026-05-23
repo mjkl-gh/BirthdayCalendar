@@ -161,16 +161,40 @@ std::string toHex(const std::vector<unsigned char>& bytes) {
 AuthService::AuthService(const AppConfig& config)
     : config_(config), signingSecret_(ensureSigningSecret()) {}
 
-JwtTokenInfo AuthService::currentHourlyToken() const {
+JwtTokenInfo AuthService::currentQrToken() const {
   const int64_t now = nowEpochSeconds();
-  const int64_t hourStart = now - (now % 3600);
+  const int64_t rotationSeconds =
+      std::max<int64_t>(1, static_cast<int64_t>(config_.jwtTokenLifetimeSeconds));
+  const int64_t windowStart = now - (now % rotationSeconds);
+  const int64_t expiresAt =
+      windowStart + rotationSeconds +
+      static_cast<int64_t>(config_.jwtRotationGraceSeconds);
+
   return {
-      .token = createTokenForHour(hourStart),
-      .expiresAtEpoch = hourStart + static_cast<int64_t>(config_.jwtTokenLifetimeSeconds + config_.jwtRotationGraceSeconds),
+      .token = createToken(windowStart, expiresAt, "qr", windowStart),
+      .expiresAtEpoch = expiresAt,
   };
 }
 
-bool AuthService::validateToken(const std::string& token) const {
+JwtTokenInfo AuthService::issueSessionToken() const {
+  const int64_t now = nowEpochSeconds();
+  const int64_t expiresAt = now + static_cast<int64_t>(config_.jwtSessionLifetimeSeconds);
+  return {
+      .token = createToken(now, expiresAt, "session"),
+      .expiresAtEpoch = expiresAt,
+  };
+}
+
+bool AuthService::validateQrToken(const std::string& token) const {
+  return validateTokenWithKind(token, "qr");
+}
+
+bool AuthService::validateSessionToken(const std::string& token) const {
+  return validateTokenWithKind(token, "session");
+}
+
+bool AuthService::validateTokenWithKind(const std::string& token,
+                                        const std::string& expectedKind) const {
   const auto parts = split(token, '.');
   if (parts.size() != 3) {
     return false;
@@ -189,13 +213,16 @@ bool AuthService::validateToken(const std::string& token) const {
   if (!payload.has_value()) {
     return false;
   }
-  return parseAndValidatePayload(payload.value());
+  return parseAndValidatePayload(payload.value(), expectedKind);
 }
 
-std::string AuthService::buildAuthCookie(const std::string& token, bool secure) const {
+std::string AuthService::buildAuthCookie(const std::string& token,
+                                         bool secure,
+                                         uint32_t maxAgeSeconds) const {
   std::stringstream cookie;
   cookie << config_.jwtCookieName << "=" << token
-         << "; Path=/; HttpOnly; SameSite=Lax";
+         << "; Path=/; HttpOnly; SameSite=Lax"
+         << "; Max-Age=" << maxAgeSeconds;
   if (secure) {
     cookie << "; Secure";
   }
@@ -277,15 +304,21 @@ std::string AuthService::ensureSigningSecret() const {
   return generated;
 }
 
-std::string AuthService::createTokenForHour(int64_t hourStartEpoch) const {
+std::string AuthService::createToken(int64_t issuedAtEpoch,
+                                     int64_t expiresAtEpoch,
+                                     const std::string& tokenKind,
+                                     int64_t windowAnchorEpoch) const {
   const std::string header = R"({"alg":"HS256","typ":"JWT"})";
 
   json payload = {
       {"iss", config_.jwtIssuer},
-      {"iat", hourStartEpoch},
-      {"exp", hourStartEpoch + static_cast<int64_t>(config_.jwtTokenLifetimeSeconds + config_.jwtRotationGraceSeconds)},
-      {"hr", hourStartEpoch},
+      {"iat", issuedAtEpoch},
+      {"exp", expiresAtEpoch},
+      {"kind", tokenKind},
   };
+  if (windowAnchorEpoch > 0) {
+    payload["wnd"] = windowAnchorEpoch;
+  }
 
   const std::string encodedHeader = base64UrlEncode(header);
   const std::string encodedPayload = base64UrlEncode(payload.dump());
@@ -309,14 +342,16 @@ std::string AuthService::sign(const std::string& content) const {
   return base64UrlEncode(std::string(reinterpret_cast<char*>(digest), len));
 }
 
-bool AuthService::parseAndValidatePayload(const std::string& payloadJson) const {
+bool AuthService::parseAndValidatePayload(const std::string& payloadJson,
+                                          const std::string& expectedKind) const {
   try {
     const json payload = json::parse(payloadJson);
     const std::string issuer = payload.value("iss", "");
+    const std::string kind = payload.value("kind", "");
     const int64_t iat = payload.value("iat", static_cast<int64_t>(0));
     const int64_t exp = payload.value("exp", static_cast<int64_t>(0));
 
-    if (issuer != config_.jwtIssuer || iat <= 0 || exp <= 0) {
+    if (issuer != config_.jwtIssuer || kind != expectedKind || iat <= 0 || exp <= 0) {
       return false;
     }
 
@@ -325,7 +360,12 @@ bool AuthService::parseAndValidatePayload(const std::string& payloadJson) const 
       return false;
     }
 
-    const int64_t oldestIat = now - static_cast<int64_t>(config_.jwtTokenLifetimeSeconds + config_.jwtRotationGraceSeconds);
+    const int64_t maxLifetime =
+      (kind == "session")
+        ? static_cast<int64_t>(config_.jwtSessionLifetimeSeconds)
+        : static_cast<int64_t>(config_.jwtTokenLifetimeSeconds +
+                     config_.jwtRotationGraceSeconds);
+    const int64_t oldestIat = now - maxLifetime;
     if (iat < oldestIat || iat > now + 60) {
       return false;
     }

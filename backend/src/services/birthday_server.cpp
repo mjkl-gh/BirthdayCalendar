@@ -91,7 +91,7 @@ void BirthdayServer::configureRoutes() {
 
     const auto token = authService_.extractTokenFromRequest(req);
     const bool isAuthenticated =
-        token.has_value() && authService_.validateToken(token.value());
+      token.has_value() && authService_.validateSessionToken(token.value());
 
     if (startsWith(req.path, "/api")) {
       if (!isPublicApi && !isAuthenticated) {
@@ -183,7 +183,7 @@ void BirthdayServer::handleAuthQr(const httplib::Request& req,
     return;
   }
 
-  const JwtTokenInfo token = authService_.currentHourlyToken();
+  const JwtTokenInfo token = authService_.currentQrToken();
   res.set_header("Cache-Control", "no-store");
   res.set_content(
       json({
@@ -206,17 +206,26 @@ void BirthdayServer::handleAuthExchange(const httplib::Request& req,
     return;
   }
 
-  const std::string token = payload.value("token", "");
-  if (token.empty() || !authService_.validateToken(token)) {
+  const std::string qrToken = payload.value("token", "");
+  if (qrToken.empty() || !authService_.validateQrToken(qrToken)) {
     res.status = 401;
     res.set_content(R"({"error":"Invalid token"})", "application/json");
     return;
   }
 
+  const JwtTokenInfo session = authService_.issueSessionToken();
   const std::string forwardedProto = req.get_header_value("X-Forwarded-Proto");
   const bool secureCookie = forwardedProto == "https";
-  res.set_header("Set-Cookie", authService_.buildAuthCookie(token, secureCookie));
-  res.set_content(R"({"ok":true})", "application/json");
+  res.set_header(
+      "Set-Cookie",
+      authService_.buildAuthCookie(session.token, secureCookie,
+                                   config_.jwtSessionLifetimeSeconds));
+  res.set_content(
+      json({
+          {"ok", true},
+          {"sessionExpiresAt", session.expiresAtEpoch},
+      }).dump(),
+      "application/json");
 }
 
 void BirthdayServer::handleCreateVcard(const httplib::Request& req,

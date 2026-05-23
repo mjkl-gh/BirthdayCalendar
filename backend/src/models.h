@@ -39,6 +39,7 @@ struct AppConfig {
   std::string jwtCookieName;
   uint32_t jwtRotationGraceSeconds;
   uint32_t jwtTokenLifetimeSeconds;
+  uint32_t jwtSessionLifetimeSeconds;
   bool trustProxy;
   std::string localQrAllowedCidrs;
 
