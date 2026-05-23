@@ -256,8 +256,7 @@ void BirthdayServer::handleAuthExchange(const httplib::Request& req,
   }
 
   const JwtTokenInfo session = authService_.issueSessionToken();
-  const std::string forwardedProto = req.get_header_value("X-Forwarded-Proto");
-  const bool secureCookie = forwardedProto == "https";
+  const bool secureCookie = config_.publicBaseUrl.rfind("https://", 0) == 0;
   res.set_header(
       "Set-Cookie",
       authService_.buildAuthCookie(session.token, secureCookie,

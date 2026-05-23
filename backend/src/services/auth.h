@@ -35,7 +35,6 @@ class AuthService {
   std::string sign(const std::string& content) const;
   bool parseAndValidatePayload(const std::string& payloadJson,
                                const std::string& expectedKind) const;
-  std::string resolveClientIp(const httplib::Request& req) const;
 
   AppConfig config_;
   std::string signingSecret_;

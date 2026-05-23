@@ -255,7 +255,7 @@ std::optional<std::string> AuthService::extractTokenFromRequest(const httplib::R
 }
 
 bool AuthService::isLocalQrClient(const httplib::Request& req) const {
-  const std::string ip = resolveClientIp(req);
+  const std::string ip = req.remote_addr;
   if (ip.empty()) {
     return false;
   }
@@ -374,8 +374,4 @@ bool AuthService::parseAndValidatePayload(const std::string& payloadJson,
   } catch (...) {
     return false;
   }
-}
-
-std::string AuthService::resolveClientIp(const httplib::Request& req) const {
-  return req.remote_addr;
 }
