@@ -437,7 +437,9 @@
       themeMode = storedMode;
     }
 
-    const tokenFromUrl = new URLSearchParams(window.location.search).get("token");
+    const tokenFromUrl = new URLSearchParams(window.location.search).get(
+      "token",
+    );
     if (tokenFromUrl) {
       authTokenInput = tokenFromUrl;
       exchangeAuthToken();

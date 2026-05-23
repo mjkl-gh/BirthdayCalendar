@@ -64,7 +64,8 @@ int BirthdayServer::run() {
     res.set_content(indexHtml.value(), "text/html");
   });
 
-  std::cout << "Birthday calendar server listening on 0.0.0.0:" << config_.port
+  std::cout << "Birthday calendar server on 0.0.0.0 port " << config_.port
+            << " (http://0.0.0.0:" << config_.port << "/)"
             << std::endl;
   server_.listen("0.0.0.0", config_.port);
   return 0;

@@ -57,18 +57,19 @@ This repo includes a ready-to-use devcontainer with Node.js and C++ build tools.
 Inside the devcontainer, run:
 
 ```bash
+cd frontend
+npm install
+npm run build
+
 cmake --build backend/build -j
 ./backend/build/birthday_backend
 ```
 
-In another terminal:
+Backend runs on `http://localhost:8080` and serves both API and built frontend from `frontend/dist`.
 
-```bash
-cd frontend
-npm run dev
-```
+### Optional: Frontend hot-reload mode
 
-### 1. Frontend
+Use this only when iterating on frontend changes with Vite dev server:
 
 ```bash
 cd frontend
@@ -76,7 +77,9 @@ npm install
 npm run dev
 ```
 
-### 2. Backend
+In this mode, the frontend dev server proxies `/api` to backend.
+
+### Backend build/run
 
 ```bash
 cmake -S backend -B backend/build -DCMAKE_BUILD_TYPE=Release
@@ -85,7 +88,6 @@ cmake --build backend/build -j
 ```
 
 Backend runs on `http://localhost:8080`.
-Frontend dev server runs on `http://localhost:5173` and proxies `/api` to backend.
 
 ## Docker
 
