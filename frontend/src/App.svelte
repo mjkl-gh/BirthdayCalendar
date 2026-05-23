@@ -263,7 +263,7 @@
       const payload = await response.json();
       authTokenInput = payload.token || "";
       qrExpiresAt = payload.expiresAt || 0;
-      authUrl = `${window.location.origin}/auth?token=${encodeURIComponent(authTokenInput)}`;
+      authUrl = payload.authUrl;
       qrDataUrl = await QRCode.toDataURL(authUrl, {
         width: 240,
         margin: 1,

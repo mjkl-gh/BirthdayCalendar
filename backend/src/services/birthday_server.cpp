@@ -25,6 +25,35 @@ bool startsWith(const std::string& value, const std::string& prefix) {
   return value.rfind(prefix, 0) == 0;
 }
 
+std::string percentEncodeQueryValue(const std::string& value) {
+  static const char* kHex = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(value.size() * 3);
+  for (unsigned char c : value) {
+    const bool isUnreserved =
+        (c >= 'a' && c <= 'z') ||
+        (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') ||
+        c == '-' || c == '_' || c == '.' || c == '~';
+    if (isUnreserved) {
+      out.push_back(static_cast<char>(c));
+      continue;
+    }
+    out.push_back('%');
+    out.push_back(kHex[(c >> 4) & 0x0F]);
+    out.push_back(kHex[c & 0x0F]);
+  }
+  return out;
+}
+
+std::string buildAuthUrl(const std::string& token, const AppConfig& config, const httplib::Request&) {
+  std::string baseUrl = config.publicBaseUrl;
+  if (baseUrl.back() == '/') {
+    baseUrl.pop_back();
+  }
+  return baseUrl + "/auth?token=" + percentEncodeQueryValue(token);
+}
+
 }  // namespace
 
 BirthdayServer::BirthdayServer(
@@ -38,6 +67,15 @@ BirthdayServer::BirthdayServer(
   vcardWorkflow_(notifiers_) {}
 
 int BirthdayServer::run() {
+  if (config_.authEnabled && config_.publicBaseUrl.empty()) {
+    std::cerr << "Error: AUTH_ENABLED is true but PUBLIC_BASE_URL is not set. "
+              << "Set PUBLIC_BASE_URL please."
+              << "\n\n"
+              << "Disable auth with AUTH_ENABLED=false. This should only be done"
+              << " for development purposes." << std::endl;
+    return 1;
+  }
+
   fs::create_directories(config_.pendingDir);
 
   configureRoutes();
@@ -84,6 +122,7 @@ void BirthdayServer::configureRoutes() {
     const bool isPublicApi =
         req.path == "/api/health" ||
         req.path == "/api/auth/qr" ||
+
         req.path == "/api/auth/exchange";
     const bool isAuthPage = req.path == "/auth";
     const bool isStaticAsset =
@@ -185,11 +224,13 @@ void BirthdayServer::handleAuthQr(const httplib::Request& req,
   }
 
   const JwtTokenInfo token = authService_.currentQrToken();
+  const std::string authUrl = buildAuthUrl(token.token, config_, req);
   res.set_header("Cache-Control", "no-store");
   res.set_content(
       json({
           {"token", token.token},
           {"expiresAt", token.expiresAtEpoch},
+          {"authUrl", authUrl},
       }).dump(),
       "application/json");
 }

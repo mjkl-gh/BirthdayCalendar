@@ -377,14 +377,5 @@ bool AuthService::parseAndValidatePayload(const std::string& payloadJson,
 }
 
 std::string AuthService::resolveClientIp(const httplib::Request& req) const {
-  if (config_.trustProxy) {
-    const std::string forwardedFor = req.get_header_value("X-Forwarded-For");
-    if (!forwardedFor.empty()) {
-      auto items = split(forwardedFor, ',');
-      if (!items.empty()) {
-        return trimCopy(items.front());
-      }
-    }
-  }
   return req.remote_addr;
 }

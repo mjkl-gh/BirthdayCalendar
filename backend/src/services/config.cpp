@@ -29,7 +29,7 @@ uint32_t getEnvIntOr(const char* key, uint32_t fallback) {
 
 AppConfig loadConfig() {
   return {
-  .publicDir = getEnvOr("PUBLIC_DIR", "../frontend/dist"),
+    .publicDir = getEnvOr("PUBLIC_DIR", "../frontend/dist"),
       .port = getEnvIntOr("PORT", 8080),
       .icalUrl = getEnvOr("ICAL_URL", ""),
       .pendingDir = getEnvOr("PENDING_DIR", "./storage/pending"),
@@ -39,6 +39,8 @@ AppConfig loadConfig() {
       .smtpPass = getEnvOr("SMTP_PASSWORD", ""),
       .smtpFrom = getEnvOr("MAIL_FROM", ""),
       .smtpTo = getEnvOr("MAIL_TO", ""),
+      .authEnabled = getEnvOr("AUTH_ENABLED", "true") == "true",
+      .publicBaseUrl = getEnvOr("PUBLIC_BASE_URL", ""),
       .jwtSecret = getEnvOr("JWT_SECRET", ""),
       .jwtSecretFile = getEnvOr("JWT_SECRET_FILE", "./storage/.jwt_secret"),
       .jwtIssuer = getEnvOr("JWT_ISSUER", "birthday-calendar"),
@@ -46,7 +48,6 @@ AppConfig loadConfig() {
       .jwtRotationGraceSeconds = getEnvIntOr("JWT_ROTATION_GRACE_SECONDS", 30),
       .jwtTokenLifetimeSeconds = getEnvIntOr("JWT_TOKEN_LIFETIME_SECONDS", 30),
       .jwtSessionLifetimeSeconds = getEnvIntOr("JWT_SESSION_LIFETIME_SECONDS", 3600),
-      .trustProxy = getEnvOr("TRUST_PROXY", "false") == "true",
       .localQrAllowedCidrs = getEnvOr("LOCAL_QR_ALLOWED_CIDRS", "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"),
   };
 }
