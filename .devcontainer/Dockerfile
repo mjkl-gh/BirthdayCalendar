@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -9,20 +9,13 @@ RUN apt-get update && \
     clang \
     cmake \
     libcurl4-openssl-dev libssl-dev \
+    libc++-dev libc++abi-dev \
     pkg-config git curl \
     locales \
     sudo \
     python3-minimal \
     && rm -rf /var/lib/apt/lists/*
 
-RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/90-ubuntu-nopasswd \
-    && chmod 0440 /etc/sudoers.d/90-ubuntu-nopasswd
-
-ARG NODE_MAJOR=22
-RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
-    && apt-get update \
-    && DEBIAN_FRONTEND=${DEBIAN_FRONTEND} apt-get install -y --no-install-recommends nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN locale-gen en_US.UTF-8
 

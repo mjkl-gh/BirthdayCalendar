@@ -5,7 +5,14 @@
         "context": ".."
     },
     "workspaceFolder": "/workspaces/BirthdayCalendar",
+    "features": {
+        "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+    },
     "remoteUser": "vscode",
+    "remoteEnv": {
+        "CC": "clang",
+        "CXX": "clang++"
+    },
     "postCreateCommand": "cd frontend && npm install && cd ../backend && cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug",
     "customizations": {
         "vscode": {
