@@ -25,6 +25,42 @@ bool startsWith(const std::string& value, const std::string& prefix) {
   return value.rfind(prefix, 0) == 0;
 }
 
+// Returns a sanitized representation of a URL suitable for logs.
+// Removes userinfo and replaces the query string with "?[REDACTED]" when present.
+std::string sanitizeUrlForLogging(const std::string& url) {
+  if (url.empty()) return "";
+  // Find scheme
+  const auto schemePos = url.find("://");
+  if (schemePos == std::string::npos) {
+    // Not a full URL — redact any query component
+    const auto q = url.find('?');
+    if (q == std::string::npos) return url;
+    return url.substr(0, q) + "?[REDACTED]";
+  }
+
+  const std::string scheme = url.substr(0, schemePos);
+  std::string rest = url.substr(schemePos + 3);
+
+  // Strip userinfo if present (user:pass@host)
+  const auto atPos = rest.find('@');
+  if (atPos != std::string::npos) {
+    rest = rest.substr(atPos + 1);
+  }
+
+  // Separate path (including possible query) from host
+  const auto slashPos = rest.find('/');
+  std::string host = (slashPos == std::string::npos) ? rest : rest.substr(0, slashPos);
+  std::string pathAndQuery = (slashPos == std::string::npos) ? std::string() : rest.substr(slashPos);
+
+  // If there's a query string, redact it
+  const auto qpos = pathAndQuery.find('?');
+  if (qpos != std::string::npos) {
+    pathAndQuery = pathAndQuery.substr(0, qpos) + "?[REDACTED]";
+  }
+
+  return scheme + "://" + host + pathAndQuery;
+}
+
 std::string percentEncodeQueryValue(const std::string& value) {
   static const char* kHex = "0123456789ABCDEF";
   std::string out;
@@ -75,7 +111,36 @@ int BirthdayServer::run() {
     return 1;
   }
 
-  fs::create_directories(config_.pendingDir);
+  try {
+    fs::create_directories(config_.pendingDir);
+  } catch (const std::exception& ex) {
+    std::cerr << "Error: failed to create pending directory '" << config_.pendingDir
+              << "': " << ex.what() << std::endl;
+    return 1;
+  }
+
+  // Startup logs: configuration summary (sanitize sensitive parts of URLs)
+  std::cout << "Config: port=" << config_.port
+            << " ical_url=" << sanitizeUrlForLogging(config_.icalUrl)
+            << " public_dir=" << config_.publicDir
+            << " pending_dir=" << config_.pendingDir << '\n';
+
+  if (!config_.authEnabled) {
+    std::cerr << "Warning: AUTH_ENABLED=false — security is disabled (development only).\n";
+  } else {
+    std::cout << "Auth: enabled; public_base_url=" << (config_.publicBaseUrl.empty() ? "(not set)" : config_.publicBaseUrl) << '\n';
+  }
+
+  // Notifier summary: list configured notifier backends
+  std::cout << "Notifiers:";
+  for (const auto& n : notifiers_) {
+    try {
+      std::cout << ' ' << n->name();
+    } catch (...) {
+      std::cout << " unknown";
+    }
+  }
+  std::cout << '\n';
 
   configureRoutes();
 
@@ -101,8 +166,13 @@ int BirthdayServer::run() {
   });
 
   std::cout << "Birthday calendar server on 0.0.0.0 port " << config_.port
-            << " (http://0.0.0.0:" << config_.port << "/)\n";
-  server_.listen("0.0.0.0", config_.port);
+            << " (http://0.0.0.0:" << config_.port << "/)" << std::endl;
+  try {
+    server_.listen("0.0.0.0", config_.port);
+  } catch (const std::exception& ex) {
+    std::cerr << "Error: server failed to start: " << ex.what() << std::endl;
+    return 1;
+  }
   return 0;
 }
 

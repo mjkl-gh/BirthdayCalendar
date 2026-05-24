@@ -8,13 +8,18 @@
 
 int main() {
   curl_global_init(CURL_GLOBAL_DEFAULT);
+  try {
+    AppConfig config = loadConfig();
+    auto notifiers = createNotifiers(config);
 
-  AppConfig config = loadConfig();
-  auto notifiers = createNotifiers(config);
+    BirthdayServer server(std::move(config), std::move(notifiers));
+    const int exitCode = server.run();
 
-  BirthdayServer server(std::move(config), std::move(notifiers));
-  const int exitCode = server.run();
-
-  curl_global_cleanup();
-  return exitCode;
+    curl_global_cleanup();
+    return exitCode;
+  } catch (const std::exception& ex) {
+    std::cerr << "Fatal: " << ex.what() << std::endl;
+    curl_global_cleanup();
+    return 1;
+  }
 }
