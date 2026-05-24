@@ -41,8 +41,12 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            # Tag the main branch as 'latest'
+            type=ref,event=branch,pattern=refs/heads/main,format=latest
+            # Also include branch refs (other branches) and PR refs
             type=ref,event=branch
             type=ref,event=pr
+            # Include commit SHA
             type=sha
 
       - name: Build and push
