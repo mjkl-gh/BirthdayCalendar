@@ -10,6 +10,7 @@ class FileNotifier final : public Notifier {
   explicit FileNotifier(std::filesystem::path pendingDir);
 
   void sendVcard(const Vcard& submission) override;
+  std::string name() const override;
 
  private:
   std::filesystem::path pendingDir_;

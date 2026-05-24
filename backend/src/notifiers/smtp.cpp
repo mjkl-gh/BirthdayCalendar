@@ -75,3 +75,7 @@ void SmtpNotifier::sendVcard(const Vcard& submission) {
                              curl_easy_strerror(result));
   }
 }
+
+std::string SmtpNotifier::name() const {
+  return "smtp";
+}

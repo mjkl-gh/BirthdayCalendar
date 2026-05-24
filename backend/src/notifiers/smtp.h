@@ -10,6 +10,7 @@ class SmtpNotifier final : public Notifier {
   explicit SmtpNotifier(AppConfig config);
 
   void sendVcard(const Vcard& submission) override;
+  std::string name() const override;
 
  private:
   AppConfig config_;

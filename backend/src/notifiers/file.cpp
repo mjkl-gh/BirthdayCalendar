@@ -12,7 +12,11 @@
 
 FileNotifier::FileNotifier(std::filesystem::path pendingDir)
     : pendingDir_(std::move(pendingDir)) {
-  std::filesystem::create_directories(pendingDir_);
+  try {
+    std::filesystem::create_directories(pendingDir_);
+  } catch (const std::exception& ex) {
+    throw std::runtime_error(std::string("FileNotifier: failed to create pending directory '") + pendingDir_.string() + "': " + ex.what());
+  }
 }
 
 void FileNotifier::sendVcard(const Vcard& submission) {
@@ -28,4 +32,8 @@ void FileNotifier::sendVcard(const Vcard& submission) {
   if (!writeTextFile(vcfPath, vcard)) {
     throw std::runtime_error("FileNotifier: failed to persist vCard: " + vcfPath.string());
   }
+}
+
+std::string FileNotifier::name() const {
+  return "file";
 }
