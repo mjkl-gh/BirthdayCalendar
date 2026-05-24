@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -280,6 +281,7 @@ bool AuthService::isLocalQrClient(const httplib::Request& req) const {
 
 std::string AuthService::ensureSigningSecret() const {
   if (!config_.jwtSecret.empty()) {
+    std::cout << "Using JWT secret provided via environment or config; not persisting.\n";
     return config_.jwtSecret;
   }
 
@@ -287,6 +289,7 @@ std::string AuthService::ensureSigningSecret() const {
   if (existing.has_value()) {
     const std::string secret = trimCopy(existing.value());
     if (!secret.empty()) {
+      std::cout << "Loaded existing JWT secret from " << config_.jwtSecretFile << "\n";
       return secret;
     }
   }
@@ -301,6 +304,7 @@ std::string AuthService::ensureSigningSecret() const {
   if (!writeTextFile(config_.jwtSecretFile, generated + "\n")) {
     throw std::runtime_error("Failed to persist generated JWT secret");
   }
+  std::cout << "Generated new JWT secret and wrote to " << config_.jwtSecretFile << "\n";
   return generated;
 }
 
