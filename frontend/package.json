@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:auth": "vite build --config vite.auth.config.js",
     "preview": "vite preview --host"
   },
   "devDependencies": {
