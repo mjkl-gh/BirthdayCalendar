@@ -11,6 +11,22 @@
     let loading = true;
     let expiresAt = 0;
 
+    async function fetchAuthPayload() {
+        const res = await fetch("/api/auth/authUrl", {
+            credentials: "include",
+        });
+        if (!res.ok) throw new Error("fetch failed: " + res.status);
+        return res.json();
+    }
+
+    async function applyAuthPayload(data) {
+        authUrl = data.authUrl;
+        token = data.token;
+        expiresAt = data.expiresAt || 0;
+        manual = token;
+        await renderQr();
+    }
+
     async function renderQr() {
         qrDataUrl = "";
         qrError = "";
@@ -20,7 +36,7 @@
                 width: 300,
                 margin: 1,
             });
-        } catch (e) {
+        } catch {
             qrError = "QR generation failed";
         }
     }
@@ -28,16 +44,7 @@
     onMount(async () => {
         loading = true;
         try {
-            const res = await fetch("/api/auth/authUrl", {
-                credentials: "include",
-            });
-            if (!res.ok) throw new Error("fetch failed: " + res.status);
-            const data = await res.json();
-            authUrl = data.authUrl;
-            token = data.token;
-            expiresAt = data.expiresAt || 0;
-            manual = token;
-            await renderQr();
+            await applyAuthPayload(await fetchAuthPayload());
         } catch (e) {
             result = "Failed to fetch authUrl: " + e.message;
         } finally {
@@ -64,10 +71,6 @@
             });
             const j = await r.json();
             result = JSON.stringify({ status: r.status, body: j }, null, 2);
-            if (r.ok) {
-                // optionally open the app
-                // window.location.href = authUrl;
-            }
         } catch (err) {
             result = "Exchange failed: " + err.message;
         }
@@ -77,16 +80,7 @@
         result = "";
         loading = true;
         try {
-            const res = await fetch("/api/auth/authUrl", {
-                credentials: "include",
-            });
-            if (!res.ok) throw new Error("fetch failed: " + res.status);
-            const data = await res.json();
-            authUrl = data.authUrl;
-            token = data.token;
-            expiresAt = data.expiresAt || 0;
-            manual = token;
-            await renderQr();
+            await applyAuthPayload(await fetchAuthPayload());
         } catch (e) {
             result = "Failed to refresh authUrl: " + e.message;
         } finally {
@@ -175,6 +169,7 @@
         padding: 2.5rem 1.2rem 4rem;
         max-width: 980px;
         margin: 0 auto;
+        font-family: "Space Grotesk", sans-serif;
     }
 
     header h1 {
@@ -183,10 +178,6 @@
         margin: 0.3rem 0;
         font-size: clamp(2rem, 5vw, 4rem);
         line-height: 1;
-    }
-
-    .shell {
-        font-family: "Space Grotesk", sans-serif;
     }
 
     .eyebrow {

@@ -181,9 +181,6 @@ int BirthdayServer::run() {
       // Ensure static assets and API routes served by the auth listener include CORS headers
       authSrv.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
         addCorsHeaders(res);
-        if (req.method == "OPTIONS") {
-          return httplib::Server::HandlerResponse::Unhandled;
-        }
         return httplib::Server::HandlerResponse::Unhandled;
       });
       authSrv.Get("/api/auth/authUrl", [this](const httplib::Request& req, httplib::Response& res) {
@@ -390,8 +387,8 @@ void BirthdayServer::handleAuthExchange(const httplib::Request& req,
     return;
   }
 
-  const std::string qrToken = payload.value("token", "");
-  if (qrToken.empty() || !authService_.validateAuthToken(qrToken)) {
+  const std::string authToken = payload.value("token", "");
+  if (authToken.empty() || !authService_.validateAuthToken(authToken)) {
     res.status = 401;
     res.set_content(R"({"error":"Invalid token"})", "application/json");
     return;
