@@ -42,6 +42,8 @@ struct AppConfig {
   uint32_t jwtRotationGraceSeconds;
   uint32_t jwtTokenLifetimeSeconds;
   uint32_t jwtSessionLifetimeSeconds;
-  std::string localQrAllowedCidrs;
+  std::string localAuthAllowedCidrs;
+  uint32_t authUrlPort;
+  std::filesystem::path authPublicDir;
 
 };

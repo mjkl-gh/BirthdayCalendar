@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "utils/file.h"
+#include <thread>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -167,6 +168,82 @@ int BirthdayServer::run() {
 
   std::cout << "Birthday calendar server on 0.0.0.0 port " << config_.port
             << " (http://0.0.0.0:" << config_.port << "/)" << std::endl;
+  // When authentication is enabled, always start a separate listener that
+  // serves the authenticated URL endpoint. Bind to 0.0.0.0:9001.
+  // When authentication is disabled (development), register the endpoint on
+  // the main server for convenience.
+  if (config_.authEnabled) {
+    const char* authBindEnv = std::getenv("AUTH_URL_BIND");
+    const std::string authBind = authBindEnv ? std::string(authBindEnv) : std::string("127.0.0.1");
+    const int authPort = static_cast<int>(config_.authUrlPort);
+    std::thread([this, authBind, authPort]() {
+      httplib::Server authSrv;
+      // Ensure static assets and API routes served by the auth listener include CORS headers
+      authSrv.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+        addCorsHeaders(res);
+        if (req.method == "OPTIONS") {
+          return httplib::Server::HandlerResponse::Unhandled;
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+      });
+      authSrv.Get("/api/auth/authUrl", [this](const httplib::Request& req, httplib::Response& res) {
+        if (!authService_.isLocalAuthClient(req)) {
+          res.status = 403;
+          res.set_content(R"({"error":"Authenticated URL endpoint is only available from local networks"})", "application/json");
+          return;
+        }
+        handleAuthUrl(req, res);
+      });
+      // Allow CORS preflight for API routes on the auth listener
+      authSrv.Options(R"(/api/.*)", [](const httplib::Request&, httplib::Response& res) {
+        addCorsHeaders(res);
+        res.status = 204;
+      });
+
+      // Expose the exchange endpoint on the auth listener so pages served
+      // from this listener can complete authentication without cross-origin
+      // failures.
+      authSrv.Post("/api/auth/exchange", [this](const httplib::Request& req, httplib::Response& res) {
+        handleAuthExchange(req, res);
+      });
+      // Serve the frontend auth page (and assets) from the auth-only listener
+      if (fs::exists(config_.authPublicDir) && fs::is_directory(config_.authPublicDir)) {
+        authSrv.set_mount_point("/", config_.authPublicDir.c_str());
+      } else {
+        std::cerr << "Warning: AUTH public dir does not exist: " << config_.authPublicDir << '\n';
+      }
+
+      authSrv.set_error_handler([this](const httplib::Request& req, httplib::Response& res) {
+        // For non-API routes, serve index.html from the public dir so SPA routing works
+        if (res.status != 404 || req.path.rfind("/api", 0) == 0) {
+          return;
+        }
+
+        const fs::path basePath = fs::path(config_.authPublicDir);
+        auto html = readTextFile(basePath / "index.html");
+        if (!html.has_value()) {
+          html = readTextFile(basePath / "auth.html");
+        }
+        if (!html.has_value()) {
+          return;
+        }
+
+        res.status = 200;
+        res.set_content(html.value(), "text/html");
+      });
+      authSrv.listen(authBind.c_str(), authPort);
+    }).detach();
+    std::cout << "authUrl server on " << authBind << " port " << authPort
+          << " (http://" << authBind << ":" << authPort << "/) endpoint: /api/auth/authUrl" << std::endl;
+  } else {
+    // When auth is disabled, expose the endpoint on the main server for
+    // development convenience.
+    server_.Get("/api/auth/authUrl", [this](const httplib::Request& req, httplib::Response& res) {
+      handleAuthUrl(req, res);
+    });
+    std::cout << "authUrl endpoint registered on main server (auth disabled)" << std::endl;
+  }
+
   try {
     server_.listen("0.0.0.0", config_.port);
   } catch (const std::exception& ex) {
@@ -187,10 +264,8 @@ void BirthdayServer::configureRoutes() {
     }
 
     const bool isPublicApi =
-        req.path == "/api/health" ||
-        req.path == "/api/auth/qr" ||
-
-        req.path == "/api/auth/exchange";
+      req.path == "/api/health" ||
+      req.path == "/api/auth/exchange";
     const bool isAuthPage = req.path == "/auth";
     const bool isStaticAsset =
         startsWith(req.path, "/assets/") ||
@@ -236,9 +311,9 @@ void BirthdayServer::configureRoutes() {
     res.set_content(R"({"ok":true})", "application/json");
   });
 
-  server_.Get("/api/auth/qr", [this](const httplib::Request& req, httplib::Response& res) {
-    handleAuthQr(req, res);
-  });
+  // Note: `/api/auth/authUrl` is intentionally NOT registered here. It is either
+  // registered on the main server (below) or served from a separate auth-only
+  // listener if `AUTH_URL_PORT` is set in the environment.
 
   server_.Post("/api/auth/exchange", [this](const httplib::Request& req, httplib::Response& res) {
     handleAuthExchange(req, res);
@@ -280,24 +355,24 @@ void BirthdayServer::handleGetBirthdays(const httplib::Request&, httplib::Respon
   res.set_content(payload.dump(), "application/json");
 }
 
-void BirthdayServer::handleAuthQr(const httplib::Request& req,
-                                  httplib::Response& res) {
+void BirthdayServer::handleAuthUrl(const httplib::Request& req,
+                                   httplib::Response& res) {
   addCorsHeaders(res);
 
-  if (!authService_.isLocalQrClient(req)) {
+  if (!authService_.isLocalAuthClient(req)) {
     res.status = 403;
-    res.set_content(R"({"error":"QR token endpoint is only available from local networks"})", "application/json");
+    res.set_content(R"({"error":"Authenticated token endpoint is only available from local networks"})", "application/json");
     return;
   }
 
-  const JwtTokenInfo token = authService_.currentQrToken();
+  const JwtTokenInfo token = authService_.currentAuthToken();
   const std::string authUrl = buildAuthUrl(token.token, config_, req);
   res.set_header("Cache-Control", "no-store");
   res.set_content(
       json({
           {"token", token.token},
           {"expiresAt", token.expiresAtEpoch},
-          {"authUrl", authUrl},
+        {"authUrl", authUrl},
       }).dump(),
       "application/json");
 }
@@ -316,7 +391,7 @@ void BirthdayServer::handleAuthExchange(const httplib::Request& req,
   }
 
   const std::string qrToken = payload.value("token", "");
-  if (qrToken.empty() || !authService_.validateQrToken(qrToken)) {
+  if (qrToken.empty() || !authService_.validateAuthToken(qrToken)) {
     res.status = 401;
     res.set_content(R"({"error":"Invalid token"})", "application/json");
     return;

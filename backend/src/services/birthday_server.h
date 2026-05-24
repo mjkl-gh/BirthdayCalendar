@@ -20,7 +20,7 @@ class BirthdayServer {
 
  private:
   void configureRoutes();
-  void handleAuthQr(const httplib::Request& req, httplib::Response& res);
+  void handleAuthUrl(const httplib::Request& req, httplib::Response& res);
   void handleAuthExchange(const httplib::Request& req, httplib::Response& res);
   void handleGetBirthdays(const httplib::Request& req, httplib::Response& res);
   void handleCreateVcard(const httplib::Request& req, httplib::Response& res);

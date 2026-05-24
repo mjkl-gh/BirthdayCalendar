@@ -17,13 +17,13 @@ class AuthService {
  public:
   explicit AuthService(const AppConfig& config);
 
-  JwtTokenInfo currentQrToken() const;
+  JwtTokenInfo currentAuthToken() const;
   JwtTokenInfo issueSessionToken() const;
-  bool validateQrToken(const std::string& token) const;
+  bool validateAuthToken(const std::string& token) const;
   bool validateSessionToken(const std::string& token) const;
   std::string buildAuthCookie(const std::string& token, bool secure, uint32_t maxAgeSeconds) const;
   std::optional<std::string> extractTokenFromRequest(const httplib::Request& req) const;
-  bool isLocalQrClient(const httplib::Request& req) const;
+  bool isLocalAuthClient(const httplib::Request& req) const;
 
  private:
   std::string ensureSigningSecret() const;

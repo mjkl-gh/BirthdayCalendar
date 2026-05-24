@@ -162,7 +162,7 @@ std::string toHex(const std::vector<unsigned char>& bytes) {
 AuthService::AuthService(const AppConfig& config)
     : config_(config), signingSecret_(ensureSigningSecret()) {}
 
-JwtTokenInfo AuthService::currentQrToken() const {
+JwtTokenInfo AuthService::currentAuthToken() const {
   const int64_t now = nowEpochSeconds();
   const int64_t rotationSeconds =
       std::max<int64_t>(1, static_cast<int64_t>(config_.jwtTokenLifetimeSeconds));
@@ -172,7 +172,7 @@ JwtTokenInfo AuthService::currentQrToken() const {
       static_cast<int64_t>(config_.jwtRotationGraceSeconds);
 
   return {
-      .token = createToken(windowStart, expiresAt, "qr", windowStart),
+      .token = createToken(windowStart, expiresAt, "auth", windowStart),
       .expiresAtEpoch = expiresAt,
   };
 }
@@ -186,8 +186,8 @@ JwtTokenInfo AuthService::issueSessionToken() const {
   };
 }
 
-bool AuthService::validateQrToken(const std::string& token) const {
-  return validateTokenWithKind(token, "qr");
+bool AuthService::validateAuthToken(const std::string& token) const {
+  return validateTokenWithKind(token, "auth");
 }
 
 bool AuthService::validateSessionToken(const std::string& token) const {
@@ -255,13 +255,13 @@ std::optional<std::string> AuthService::extractTokenFromRequest(const httplib::R
   return std::nullopt;
 }
 
-bool AuthService::isLocalQrClient(const httplib::Request& req) const {
+bool AuthService::isLocalAuthClient(const httplib::Request& req) const {
   const std::string ip = req.remote_addr;
   if (ip.empty()) {
     return false;
   }
 
-  const auto cidrs = split(config_.localQrAllowedCidrs, ',');
+  const auto cidrs = split(config_.localAuthAllowedCidrs, ',');
   for (const std::string& cidrRaw : cidrs) {
     const std::string cidr = trimCopy(cidrRaw);
     if (cidr.empty()) continue;
