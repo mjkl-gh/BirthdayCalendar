@@ -21,7 +21,8 @@
   let authTokenInput = "";
   let authUrl = "";
   let qrDataUrl = "";
-  let qrExpiresAt = 0;
+
+  let authUrlExpiresAt = 0;
 
   const deviceTimeZone =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -243,34 +244,34 @@
 
     if (response.status === 401) {
       authRequired = true;
-      await loadQrToken();
+      await loadAuthUrl();
     }
     return response;
   }
 
-  async function loadQrToken() {
+  async function loadAuthUrl() {
     authLoading = true;
     authError = "";
     try {
-      const response = await fetch("/api/auth/qr", {
+      const response = await fetch("/api/auth/authUrl", {
         credentials: "include",
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || "Could not load local QR token");
+        throw new Error(payload.error || "Could not load local auth URL");
       }
 
       const payload = await response.json();
       authTokenInput = payload.token || "";
-      qrExpiresAt = payload.expiresAt || 0;
-      authUrl = payload.authUrl;
-      qrDataUrl = await QRCode.toDataURL(authUrl, {
-        width: 240,
-        margin: 1,
-      });
+      authUrlExpiresAt = payload.expiresAt || 0;
+      authUrl = payload.authUrl || "";
+      try {
+        qrDataUrl = await QRCode.toDataURL(authUrl, { width: 240, margin: 1 });
+      } catch (e) {
+        qrDataUrl = "";
+      }
     } catch (err) {
       authError = err.message;
-      qrDataUrl = "";
       authUrl = "";
     } finally {
       authLoading = false;
@@ -378,7 +379,7 @@
       });
 
       if (response.status === 401) {
-        throw new Error("Please authenticate using the local QR token first");
+        throw new Error("Please authenticate using the local auth token first");
       }
 
       const payload = await response.json();
@@ -482,15 +483,15 @@
       <h2>Authenticate To Continue</h2>
       <p>
         Open this page from your local network to retrieve the rotating token
-        QR, then paste or scan the token below.
+        URL, then paste the token below or click Authenticate.
       </p>
 
       {#if authLoading}
-        <p class="state">Loading local QR token...</p>
+        <p class="state">Loading local auth URL...</p>
       {:else}
         {#if qrDataUrl}
           <img class="qr-image" src={qrDataUrl} alt="Auth token QR code" />
-          <p class="state">Token expires at {formatEpoch(qrExpiresAt)}</p>
+          <p class="state">Token expires at {formatEpoch(authUrlExpiresAt)}</p>
           <p class="auth-url">
             <a href={authUrl}>{authUrl}</a>
           </p>
@@ -504,7 +505,7 @@
         ></textarea>
 
         <div class="auth-actions">
-          <button class="ghost" on:click={loadQrToken}>Refresh QR</button>
+          <button class="ghost" on:click={loadAuthUrl}>Refresh QR</button>
           <button class="solid" on:click={exchangeAuthToken}
             >Authenticate</button
           >
