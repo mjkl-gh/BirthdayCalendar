@@ -1,40 +1,42 @@
 # Birthday Calendar
 
-> ⚠️ **Warning:** This project is vibecoded dogshit. Run at your own risk.
-> Then again, stuff meant for a magic mirror on the toilet should not be mission critical, right?
-
 Self-hosted birthday calendar app with:
 - A modern Svelte frontend that shows birthdays grouped by month from a shared iCal feed.
 - A C++ backend API that fetches and parses iCal data.
 - A plus-button flow for submitting a missing birthday as a generated vCard.
 - Pluggable notifier channels (Strategy pattern): SMTP (Gmail app password) and file-based fallback.
 - Temporary vCard storage that auto-cleans when birthdays appear in the iCal feed.
-- JWT-based authentication with rotating QR tokens for local access.
+- JWT-based authentication with rotating local auth URLs for local access.
 - Dockerized deployment and GitHub Actions image publishing.
 
 ## Architecture
 
-- Frontend: Svelte 5 + Vite (`frontend/`)
+- Frontend app: Svelte 5 + Vite (`frontend/`)
+- Auth frontend: dedicated Svelte entrypoint built to `frontend/auth-dist/`
 - Backend: C++20 + `cpp-httplib` + `libcurl` + `nlohmann/json` + OpenSSL (`backend/`)
 - Temporary storage: `storage/pending/` (pending vCards)
 - JWT signing secret: `storage/.jwt_secret` (auto-generated on first run)
 
 ## Authentication
 
-The app uses JWT-based authentication with a rotating QR code intended for display on a local Magic Mirror device (e.g. via [MMM-QRCode](https://github.com/uxigene/MMM-QRCode)).
+The app uses JWT-based authentication with a rotating auth URL intended for display on a local Magic Mirror device.
 
 **Flow:**
-1. Magic Mirror polls `GET /api/auth/qr` (local network only) and displays the returned `authUrl` as a QR code.
-2. User scans QR with phone. Browser opens `PUBLIC_BASE_URL/auth?token=...` (public address).
+1. Magic Mirror polls `GET /api/auth/authUrl` (local network only) to retrieve the rotating auth URL.
+2. User opens the `authUrl` on their phone/browser. Browser opens `PUBLIC_BASE_URL/auth?token=...`.
 3. Token is exchanged via `POST /api/auth/exchange`, which sets an HTTP-only session cookie.
 4. Subsequent requests are authenticated via the cookie.
 
-**QR token rotation:**
+When auth is enabled, the backend starts two listeners:
+- Main app/API listener on `PORT` (default `8080`)
+- Auth listener on `AUTH_URL_PORT` (default `9001`) that serves the auth page and `/api/auth/authUrl`
+
+**Auth token rotation:**
 - Tokens rotate on a configurable window (`JWT_TOKEN_LIFETIME_SECONDS`, default 30s).
 - A grace period (`JWT_ROTATION_GRACE_SECONDS`, default 30s) allows scanning near rotation boundaries.
 - Session tokens last independently (`JWT_SESSION_LIFETIME_SECONDS`, default 1h).
 
-**`/api/auth/qr` is restricted to local network clients** via CIDR allowlist (`LOCAL_QR_ALLOWED_CIDRS`).
+**`/api/auth/authUrl` is restricted to local network clients** via CIDR allowlist (`LOCAL_AUTH_ALLOWED_CIDRS`).
 
 ## Notifier Channels
 
@@ -61,10 +63,13 @@ Copy `.env.example` to `.env` and update values.
 | `JWT_SECRET_FILE` | `./storage/.jwt_secret` | Path to persist auto-generated secret |
 | `JWT_ISSUER` | `birthday-calendar` | JWT issuer claim |
 | `JWT_COOKIE_NAME` | `birthday_auth` | Session cookie name |
-| `JWT_TOKEN_LIFETIME_SECONDS` | `30` | QR token rotation window |
+| `JWT_TOKEN_LIFETIME_SECONDS` | `30` | Auth token rotation window |
 | `JWT_ROTATION_GRACE_SECONDS` | `30` | Grace period around rotation boundary |
 | `JWT_SESSION_LIFETIME_SECONDS` | `3600` | Session cookie lifetime (1h) |
-| `LOCAL_QR_ALLOWED_CIDRS` | *(LAN ranges)* | Comma-separated CIDRs allowed to fetch QR tokens |
+| `LOCAL_AUTH_ALLOWED_CIDRS` | *(LAN ranges)* | Comma-separated CIDRs allowed to fetch auth tokens |
+| `AUTH_URL_PORT` | `9001` | Port used by the auth-only listener |
+| `AUTH_URL_BIND` | `127.0.0.1` | Bind address for auth-only listener (`0.0.0.0` for LAN access) |
+| `AUTH_PUBLIC_DIR` | `../frontend/auth-dist` | Path to built auth frontend assets |
 | `PORT` | `8080` | Backend listen port |
 | `PUBLIC_DIR` | `../frontend/dist` | Path to built frontend assets |
 | `PENDING_DIR` | `./storage/pending` | Path to pending vCard storage |
@@ -82,8 +87,8 @@ This repo includes a ready-to-use devcontainer with Node.js and C++ build tools.
 Inside the devcontainer:
 
 ```bash
-# Build frontend
-cd frontend && npm install && npm run build && cd ..
+# Build both frontend bundles
+cd frontend && npm install && npm run build && npm run build:auth && cd ..
 
 # Build and run backend (serves API + frontend)
 cmake --build backend/build -j
@@ -122,15 +127,19 @@ docker compose up --build
 
 Container exposes port `8080`.
 
+If you use the split auth UI externally, also expose `AUTH_URL_PORT` and set:
+- `AUTH_URL_BIND=0.0.0.0`
+- `AUTH_PUBLIC_DIR=/app/frontend/auth-dist` (or equivalent in your image layout)
+
 ## API
 
-All endpoints except `/api/health`, `/api/auth/qr`, and `/api/auth/exchange` require a valid session cookie.
+All endpoints except `/api/health`, `/api/auth/authUrl`, and `/api/auth/exchange` require a valid session cookie.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/health` | No | Health check |
-| `GET` | `/api/auth/qr` | Local only | Get rotating QR token + auth URL |
-| `POST` | `/api/auth/exchange` | No | Exchange QR token for session cookie |
+| `GET` | `/api/auth/authUrl` | Local only | Get rotating auth token + auth URL |
+| `POST` | `/api/auth/exchange` | No | Exchange auth token for session cookie |
 | `GET` | `/api/birthdays` | Yes | List birthdays (iCal + pending) |
 | `POST` | `/api/vcards` | Yes | Submit a missing birthday vCard |
 
@@ -146,7 +155,7 @@ All endpoints except `/api/health`, `/api/auth/qr`, and `/api/auth/exchange` req
 }
 ```
 
-### GET /api/auth/qr (local network only)
+### GET /api/auth/authUrl (local network only)
 
 ```json
 {
