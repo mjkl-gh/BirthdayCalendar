@@ -7,7 +7,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "cd /workspaces/BirthdayCalendar/frontend && npm run build"
+                "cd ${workspaceFolder}/frontend && npm run build"
             ],
             "problemMatcher": []
         },
@@ -17,7 +17,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "cd /workspaces/BirthdayCalendar/frontend && npm run build:auth"
+                "cd ${workspaceFolder}/frontend && npm run build:auth"
             ],
             "problemMatcher": []
         },
@@ -27,7 +27,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "cd /workspaces/BirthdayCalendar/storage/demo-ical && if curl -sS http://localhost:8090/birthdays.ics >/dev/null 2>&1; then echo \"demo iCal server already running\"; else npx --yes http-server . -p 8090 --cors --silent; fi"
+                "cd ${workspaceFolder}/storage/demo-ical && if curl -sS http://localhost:8090/birthdays.ics >/dev/null 2>&1; then echo \"demo iCal server already running\"; else npx --yes http-server . -p 8090 --cors --silent; fi"
             ],
             "isBackground": true,
             "problemMatcher": []
@@ -38,7 +38,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "cd /workspaces/BirthdayCalendar/backend && AUTH_URL_BIND=0.0.0.0 ICAL_URL=http://localhost:8090/birthdays.ics PUBLIC_DIR=../frontend/dist AUTH_PUBLIC_DIR=../frontend/auth-dist PUBLIC_BASE_URL=http://localhost:8080 AUTH_ENABLED=true ./build/magic_mirror_companion_backend"
+                "cd ${workspaceFolder}/backend && AUTH_URL_BIND=0.0.0.0 ICAL_URL=http://localhost:8090/birthdays.ics PUBLIC_DIR=../frontend/dist AUTH_PUBLIC_DIR=../frontend/auth-dist PUBLIC_BASE_URL=http://localhost:8080 AUTH_ENABLED=true ./build/magic_mirror_companion_backend"
             ],
             "isBackground": true,
             "problemMatcher": []
