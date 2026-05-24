@@ -38,7 +38,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "cd /workspaces/BirthdayCalendar/backend && AUTH_URL_BIND=0.0.0.0 ICAL_URL=http://localhost:8090/birthdays.ics PUBLIC_DIR=../frontend/dist AUTH_PUBLIC_DIR=../frontend/auth-dist PUBLIC_BASE_URL=http://localhost:8080 AUTH_ENABLED=true ./build/birthday_backend"
+                "cd /workspaces/BirthdayCalendar/backend && AUTH_URL_BIND=0.0.0.0 ICAL_URL=http://localhost:8090/birthdays.ics PUBLIC_DIR=../frontend/dist AUTH_PUBLIC_DIR=../frontend/auth-dist PUBLIC_BASE_URL=http://localhost:8080 AUTH_ENABLED=true ./build/magic_mirror_companion_backend"
             ],
             "isBackground": true,
             "problemMatcher": []

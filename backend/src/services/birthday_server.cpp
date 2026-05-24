@@ -166,7 +166,7 @@ int BirthdayServer::run() {
     res.set_content(indexHtml.value(), "text/html");
   });
 
-  std::cout << "Birthday calendar server on 0.0.0.0 port " << config_.port
+  std::cout << "Magic Mirror Companion server on 0.0.0.0 port " << config_.port
             << " (http://0.0.0.0:" << config_.port << "/)" << std::endl;
   // When authentication is enabled, always start a separate listener that
   // serves the authenticated URL endpoint. Bind to 0.0.0.0:9001.

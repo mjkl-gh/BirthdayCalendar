@@ -27,7 +27,7 @@
   const deviceTimeZone =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const themeTimerMs = 60_000;
-  const themeStorageKey = "birthday-calendar-theme-mode";
+  const themeStorageKey = "magic-mirror-companion-theme-mode";
 
   let form = {
     firstName: "",
@@ -474,7 +474,7 @@
 
   <header>
     <p class="eyebrow">Shared iCal</p>
-    <h1>Birthday Constellation</h1>
+    <h1>Magic Mirror Companion</h1>
     <p class="sub">If someone is missing, tap + and send a vCard request.</p>
   </header>
 

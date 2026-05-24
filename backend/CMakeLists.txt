@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(BirthdayCalendarBackend LANGUAGES CXX)
+project(MagicMirrorCompanionBackend LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,7 +24,7 @@ FetchContent_MakeAvailable(json)
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-add_executable(birthday_backend
+add_executable(magic_mirror_companion_backend
   src/main.cpp
   src/services/birthday_server.cpp
   src/services/config.cpp
@@ -41,12 +41,12 @@ add_executable(birthday_backend
   src/services/vcard_workflow.cpp
 )
 
-target_include_directories(birthday_backend PRIVATE
+target_include_directories(magic_mirror_companion_backend PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${httplib_SOURCE_DIR}
 )
 
-target_link_libraries(birthday_backend PRIVATE
+target_link_libraries(magic_mirror_companion_backend PRIVATE
   nlohmann_json::nlohmann_json
   CURL::libcurl
   OpenSSL::SSL

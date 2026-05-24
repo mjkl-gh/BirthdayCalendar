@@ -1,12 +1,14 @@
 {
-    "name": "BirthdayCalendar Dev",
+    "name": "Magic Mirror Companion Dev",
     "build": {
         "dockerfile": "Dockerfile",
         "context": ".."
     },
     "workspaceFolder": "/workspaces/BirthdayCalendar",
     "features": {
-        "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "22"
+        }
     },
     "remoteUser": "vscode",
     "remoteEnv": {

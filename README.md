@@ -1,6 +1,9 @@
-# Birthday Calendar
+# Magic Mirror Companion
 
-Self-hosted birthday calendar app with:
+> ⚠️ **Warning:** This project is vibecoded dogshit. Run at your own risk.
+> Then again, stuff meant for a magic mirror on the toilet should not be mission critical, right?
+
+Self-hosted companion app with:
 - A modern Svelte frontend that shows birthdays grouped by month from a shared iCal feed.
 - A C++ backend API that fetches and parses iCal data.
 - A plus-button flow for submitting a missing birthday as a generated vCard.
@@ -61,8 +64,8 @@ Copy `.env.example` to `.env` and update values.
 | `PUBLIC_BASE_URL` | *(required when auth enabled)* | Public base URL, e.g. `https://your-domain.com` |
 | `JWT_SECRET` | | Static JWT signing secret. Omit to auto-generate |
 | `JWT_SECRET_FILE` | `./storage/.jwt_secret` | Path to persist auto-generated secret |
-| `JWT_ISSUER` | `birthday-calendar` | JWT issuer claim |
-| `JWT_COOKIE_NAME` | `birthday_auth` | Session cookie name |
+| `JWT_ISSUER` | `magic-mirror-companion` | JWT issuer claim |
+| `JWT_COOKIE_NAME` | `magic_mirror_companion_auth` | Session cookie name |
 | `JWT_TOKEN_LIFETIME_SECONDS` | `30` | Auth token rotation window |
 | `JWT_ROTATION_GRACE_SECONDS` | `30` | Grace period around rotation boundary |
 | `JWT_SESSION_LIFETIME_SECONDS` | `3600` | Session cookie lifetime (1h) |
@@ -92,7 +95,7 @@ cd frontend && npm install && npm run build && npm run build:auth && cd ..
 
 # Build and run backend (serves API + frontend)
 cmake --build backend/build -j
-AUTH_ENABLED=false ./backend/build/birthday_backend
+AUTH_ENABLED=false ./backend/build/magic_mirror_companion_backend
 ```
 
 Backend runs on `http://localhost:8080` and serves both API and built frontend.
@@ -114,7 +117,7 @@ Vite dev server proxies `/api` to the backend.
 ```bash
 cmake -S backend -B backend/build -DCMAKE_BUILD_TYPE=Release
 cmake --build backend/build -j
-./backend/build/birthday_backend
+./backend/build/magic_mirror_companion_backend
 ```
 
 ## Docker

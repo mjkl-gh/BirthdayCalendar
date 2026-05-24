@@ -5,7 +5,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json ./
 RUN npm install
 COPY frontend/ ./
-RUN npm run build
+RUN npm run build && npm run build:auth
 
 FROM alpine:3.23 AS backend-builder
 # Install static/development packages for a musl static build
@@ -23,17 +23,19 @@ FROM alpine:3.23 AS runtime
 # Runtime needs the dynamic libraries used by the binary
 RUN apk add --no-cache libstdc++ libcurl openssl ca-certificates
 WORKDIR /app
-COPY --from=backend-builder /app/backend/build/birthday_backend /app/birthday_backend
+COPY --from=backend-builder /app/backend/build/magic_mirror_companion_backend /app/magic_mirror_companion_backend
 COPY --from=frontend-builder /app/frontend/dist /app/public
+COPY --from=frontend-builder /app/frontend/auth-dist /app/auth-public
 COPY storage /app/storage
   # Create an unprivileged runtime user and ensure storage ownership is correct
   RUN addgroup -S app && adduser -S -G app -u 1000 app \
     && mkdir -p /app/storage/pending \
-    && chown -R app:app /app/storage /app/public /app/birthday_backend \
-    && chmod +x /app/birthday_backend || true
+    && chown -R app:app /app/storage /app/public /app/auth-public /app/magic_mirror_companion_backend \
+    && chmod +x /app/magic_mirror_companion_backend || true
   USER app
 ENV PORT=8080
 ENV PUBLIC_DIR=/app/public
+ENV AUTH_PUBLIC_DIR=/app/auth-public
 ENV PENDING_DIR=/app/storage/pending
 EXPOSE 8080
-CMD ["/app/birthday_backend"]
+CMD ["/app/magic_mirror_companion_backend"]
