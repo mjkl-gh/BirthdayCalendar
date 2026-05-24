@@ -12,12 +12,22 @@
             "problemMatcher": []
         },
         {
+            "label": "Build frontend (auth)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "cd /workspaces/BirthdayCalendar/frontend && npm run build:auth"
+            ],
+            "problemMatcher": []
+        },
+        {
             "label": "Run demo iCal server",
             "type": "shell",
             "command": "bash",
             "args": [
                 "-lc",
-                "cd /workspaces/BirthdayCalendar/storage/demo-ical && python3 -m http.server 8090 --bind 0.0.0.0"
+                "cd /workspaces/BirthdayCalendar/storage/demo-ical && if curl -sS http://localhost:8090/birthdays.ics >/dev/null 2>&1; then echo \"demo iCal server already running\"; else npx --yes http-server . -p 8090 --cors --silent; fi"
             ],
             "isBackground": true,
             "problemMatcher": []
@@ -28,7 +38,7 @@
             "command": "bash",
             "args": [
                 "-lc",
-                "cd /workspaces/BirthdayCalendar/backend && ICAL_URL=http://localhost:8090/birthdays.ics PUBLIC_DIR=../frontend/dist ./build/birthday_backend"
+                "cd /workspaces/BirthdayCalendar/backend && AUTH_URL_BIND=0.0.0.0 ICAL_URL=http://localhost:8090/birthdays.ics PUBLIC_DIR=../frontend/dist AUTH_PUBLIC_DIR=../frontend/auth-dist PUBLIC_BASE_URL=http://localhost:8080 AUTH_ENABLED=true ./build/birthday_backend"
             ],
             "isBackground": true,
             "problemMatcher": []
@@ -37,10 +47,11 @@
             "label": "Run demo stack (backend + iCal)",
             "dependsOn": [
                 "Build frontend (prod)",
+                "Build frontend (auth)",
                 "Run demo iCal server",
                 "Run backend (demo)"
             ],
-            "dependsOrder": "parallel",
+            "dependsOrder": "sequence",
             "problemMatcher": []
         }
     ]
